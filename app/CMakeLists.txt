@@ -37,6 +37,23 @@ endif()
 # --gpu_plugin ya no hace falta; se puede seguir pasando para cambiarlo.
 rexglue_setup_target(nfsmw GPU_PLUGINS xenos)
 
+# Native Qt launcher (Linux). Used by packaging/appimage/.
+option(NFSMW_BUILD_LAUNCHER "Build the native Qt launcher" ON)
+option(NFSMW_LAUNCHER_BUILD_TESTS "Build Qt launcher tests" OFF)
+if(NFSMW_BUILD_LAUNCHER AND UNIX AND NOT APPLE)
+    find_package(Qt6 6.4 COMPONENTS Core Gui Widgets QUIET)
+    if(Qt6_FOUND)
+        if(NFSMW_LAUNCHER_BUILD_TESTS)
+            enable_testing()
+        endif()
+        add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../launcher-linux"
+                         "${CMAKE_CURRENT_BINARY_DIR}/launcher-linux")
+    else()
+        message(WARNING
+            "Qt 6.4+ was not found; nfsmw_launcher will not be built")
+    endif()
+endif()
+
 
 # =============================================================================
 #  TARGET "dist" - la carpeta portable, que se llama  build\
