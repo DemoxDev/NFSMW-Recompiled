@@ -1,0 +1,80 @@
+# =============================================================================
+#  Lo que NUNCA se versiona
+#
+#  El primer bloque no es preferencia, es la linea que no se cruza. El
+#  ejecutable compilado lleva DENTRO el codigo del juego traducido, asi que
+#  cuenta como el juego, no como el proyecto. Lo mismo el C++ que sale del
+#  generador. Ver la seccion Legal del README.
+# =============================================================================
+
+# --- Ficheros del juego ------------------------------------------------------
+assets/
+*.xex
+*.xexp
+*.iso
+*.pe
+*.big
+*.bun
+*.viv
+
+# --- Salida del generador de codigo -----------------------------------------
+# Se deriva del XEX, asi que tampoco se distribuye.
+generated/
+app/generated/
+
+# --- Compilacion -------------------------------------------------------------
+out/
+build/
+app/build/
+app/out/
+CMakeUserPresets.json
+
+# El ejecutable del juego, se llame como se llame. Va aparte de build/ porque
+# el lanzador toma el nombre bonito y es facil confundirlos.
+nfsmw.exe
+NFS_Most_Wanted.exe
+
+# El lanzador compilado. El fuente si se versiona; el binario se construye.
+Lanzador.exe
+
+# --- La caratula del juego ---------------------------------------------------
+# Es arte de Electronic Arts. El lanzador arranca perfectamente sin ella: si el
+# recurso no esta, el panel lateral se dibuja en negro con el titulo. Ver
+# docs/lanzador.md si quieres poner la tuya.
+tools/lanzador/portada.jpg
+tools/lanzador/portada.png
+tools/lanzador/icono.ico
+
+# --- Logs y volcados ---------------------------------------------------------
+logs/
+*.log
+*.rar
+*.zip
+*.7z
+
+# Volcados que generan las herramientas y se rehacen solos.
+docs/huecos.txt
+docs/iso_listado.txt
+docs/xex_info.txt
+docs/sondeo_direcciones.txt
+docs/rendimiento_resultados.txt
+tools/huecos_functions.toml
+
+# --- Configuracion local -----------------------------------------------------
+# Preferencias del lanzador y ajustes del juego: son de cada maquina.
+lanzador.json
+config/lanzador.json
+nfsmw.toml.antes
+
+# --- Editores ----------------------------------------------------------------
+.vs/
+.vscode/
+.idea/
+compile_commands.json
+__pycache__/
+*.pyc
+
+# --- Copias de seguridad de los parches --------------------------------------
+# Los parches actuales aplican y revierten por texto y no dejan .original, pero
+# algunos del SDK todavia los generan.
+*.original

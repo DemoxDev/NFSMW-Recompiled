@@ -1,0 +1,53 @@
+# ============================================================================
+#  NFSMW Recomp - configuracion del ejecutable
+#
+#  El juego lee este archivo al arrancar, desde SU PROPIA CARPETA:
+#      <carpeta del .exe>\nfsmw.toml
+#
+#  El nombre no es el del ejecutable, es el de la app -"nfsmw"-, asi que vale
+#  igual al lado de NFS_Most_Wanted.exe que de nfsmw.exe.
+#
+#  Los argumentos de la linea de comandos MANDAN sobre lo que haya aqui, asi
+#  que se puede seguir probando cosas con PROBAR_RTV.bat sin tocar el archivo.
+# ============================================================================
+
+
+# ----------------------------------------------------------------------------
+#  Camino de emulacion de la EDRAM
+# ----------------------------------------------------------------------------
+#
+#  QUE ES
+#  La Xbox 360 no tiene render targets normales: tiene 10 MB de memoria
+#  embebida -la EDRAM- donde el hardware fijo hace la mezcla y el test de
+#  profundidad. Emular eso se puede de dos formas:
+#
+#    "rtv"  render targets del host, usando la GPU de forma normal. Rapido.
+#    "rov"  se emula la EDRAM a mano dentro del pixel shader, con interlocks
+#           que fuerzan a procesar EN ORDEN los pixeles que se solapan. Es
+#           mas exacto y MUCHO mas lento.
+#
+#  POR QUE ESTA PUESTO A MANO
+#  Porque el SDK no elegia por rendimiento sino por FABRICANTE
+#  -src/graphics/d3d12/render_target_cache.cpp-:
+#
+#      path_ = vendor == kIntel ? kPixelShaderInterlock : kHostRenderTargets;
+#
+#  Si la grafica era Intel, ROV forzado. El motivo esta fechado en el propio
+#  comentario del SDK: un bug del driver de Intel de abril de 2021 -una UHD
+#  630- por el que la comparacion de stencil "always" no funcionaba. Y encima
+#  el comentario de al lado dice "The ROV path is currently much slower
+#  generally".
+#
+#  MEDIDO EN ESTE PROYECTO, en una Intel Iris 540, mismo sitio, sin vsync:
+#      rov (lo que forzaba el SDK)    ~10 fps
+#      rtv (esto)                     ~18 fps
+#
+#  Y sin fallos visibles, o sea que el bug de 2021 ya no esta en el driver.
+#
+#  En NVIDIA y AMD "rtv" ya era el valor por defecto, asi que ponerlo aqui no
+#  cambia nada para ellos. Lo unico que hace esta linea es quitar de en medio
+#  una decision tomada por marca de tarjeta.
+#
+#  SI ALGUNA VEZ SE VE MAL -fantasmas, cosas que no se borran, restos del
+#  fotograma anterior- se prueba "rov" y se compara.
+render_target_path_d3d12 = "rtv"

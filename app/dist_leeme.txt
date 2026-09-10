@@ -1,0 +1,150 @@
+================================================================================
+  NFS: Most Wanted (Xbox 360)  -  Recompilacion estatica
+  Carpeta portable
+================================================================================
+
+COMO SE USA
+-----------
+  1. Copia tu ISO en esta misma carpeta.
+     Si la llamas  nfsmw.iso  se elegira esa aunque haya mas.
+
+  2. Doble clic en  NFS_Most_Wanted.exe
+
+     Ese es EL LANZADOR: abre una ventana con la portada al lado donde
+     eliges ISO, resolucion, escala, pantalla completa o ventana, vsync,
+     limite de fps, motor de video y API grafica. Recuerda lo elegido
+     para la proxima vez.
+
+     Si prefieres ir directo, doble clic en  nfsmw.exe , que es el juego
+     de verdad: coge la ISO que encuentre en la carpeta y los ajustes de
+     nfsmw.toml.
+
+     LANZADOR.bat abre la version antigua de esa ventana, en PowerShell.
+     Hace lo mismo y comparte los ajustes; esta por si acaso.
+
+Nada mas. No hay que instalar nada, ni pasar parametros, ni extraer la ISO.
+La carpeta funciona este donde este: C:\Juegos\, D:\, un USB, el Escritorio.
+
+
+QUE ES CADA ARCHIVO
+-------------------
+  NFS_Most_Wanted.exe      EL LANZADOR. Lleva el icono del juego porque es
+                           lo que hay que abrir. No es el juego.
+  nfsmw.exe                el juego. Ver mas abajo que es exactamente.
+  rexruntime.dll           el runtime del SDK: kernel, sistema de archivos,
+                           audio, entrada, ventana.
+  rexgpu-xenos.dll         emulacion de la GPU Xenos traducida a Direct3D 12.
+                           Se carga en tiempo de ejecucion, no esta enlazada.
+  MSVCP140.dll             \
+  MSVCP140_ATOMIC_WAIT.dll  |  runtime de Visual C++. Van aqui para no tener
+  VCRUNTIME140.dll          |  que instalar el Redistribuible.
+  VCRUNTIME140_1.dll       /
+  LANZADOR.bat             la ventana de opciones antigua, en PowerShell.
+                           Hace lo mismo que NFS_Most_Wanted.exe y comparte
+                           los ajustes. Esta por si el lanzador diera guerra.
+  lanzador.ps1             lo que abre LANZADOR.bat. No se toca.
+  COMPARAR_VIDEO.bat       compara los dos motores de emulacion de video.
+                           Solo hace falta si te pedimos una prueba.
+  PROBAR.bat               prueba de arranque, por si el juego no abre.
+  matriz.ps1               lo que usa PROBAR.bat. No se toca.
+  nfsmw.toml               ajustes. Trae elegido el motor de video rapido.
+  logs\                    se crea solo al ejecutar.
+
+El resto de lo que necesita -el UCRT, Direct3D 12, DXGI- ya forma parte de
+Windows 10 y 11.
+
+
+QUE TRAE ARREGLADO ESTA VERSION
+-------------------------------
+EL AUDIO SE MORIA Y EL JUEGO SE COLGABA
+  Al salir del taller tras el prologo, a los segundos moria el audio, y al
+  intentar volver al menu el juego se quedaba clavado.
+
+  Todo el audio lo lleva un solo hilo del juego: el mismo alimenta al
+  descodificador, consume lo que sale y mezcla. Cuando ese hilo entraba a
+  mezclar una voz que acababa de quedarse sin datos, se ponia a esperar audio
+  que solo podia producir el descodificador... al que tendria que alimentar
+  el mismo, en cuanto saliera de ahi. Y no salia.
+
+  El juego tiene una salida de emergencia -cuando su lectura alcanza a la
+  escritura, pregunta si el buffer sigue valido y, si le dicen que no, lo da
+  por terminado-, pero en el atasco se quedaba a un bloque de alcanzarla, asi
+  que nunca llegaba a preguntar. Ahora se le da esa senal cuando lleva mas de
+  un cuarto de segundo girando en vano.
+
+  Puede costar un tropiezo de audio en esa voz. A cambio de no colgarse.
+
+EL LOG SE COMIA LA CPU
+  El aviso "Too few processor cores" se escribia mil veces por segundo en
+  equipos de pocos nucleos: 105 MB de log en un cuarto de hora, y la CPU que
+  le robaba era justo la que le hacia falta al audio. Ahora sale una vez.
+
+SI NO HAY GRAFICA COMPATIBLE
+  Si no se encuentra ninguna con Direct3D 12 nivel 11_0, se intenta WARP -el
+  rasterizador por software- antes de rendirse. Va lentisimo, pero arranca. Y
+  si tampoco hay WARP, sale un cuadro de dialogo explicandolo, en vez de que
+  el ejecutable no haga nada al abrirlo.
+
+
+ESTO NO ES UN EMULADOR
+----------------------
+El codigo PowerPC del juego se tradujo a C++ y se compilo como programa nativo
+de x86-64. Corre directamente en tu CPU, sin interpretar nada en tiempo real.
+Solo la GPU se emula, traduciendola a Direct3D 12.
+
+Consecuencia importante: el .exe NO es un programa que "carga" el juego. Es el
+codigo del propio juego, traducido y compilado dentro. Cada copia se construye
+desde una ISO concreta.
+
+
+AJUSTES
+-------
+Arranca bien sin tocar nada. Si quieres cambiar algo, hay dos vias.
+
+Por linea de comandos, que manda sobre todo lo demas:
+
+    nfsmw.exe --resolution 1080p --resolution_scale 2
+
+  --resolution WxH        tamano de la ventana y de la imagen final.
+                          Presets: 480p 540p 720p 900p 1080p 1440p 1800p 4k
+  --resolution_scale N    resolucion INTERNA de verdad (1, 2, 3). Multiplica
+                          los render targets. Cuesta al cuadrado: 2x son
+                          cuatro veces los pixeles.
+  --fullscreen=false      arrancar en ventana.
+  --game_data_root RUTA   usar otra ISO o una carpeta extraida.
+  --log_level debug       mas detalle en logs\
+
+O con un archivo  nfsmw.toml  al lado del .exe, que el juego lee al arrancar.
+Ojo: game_data_root NO funciona ahi. El SDK resuelve las rutas antes de leer
+el toml, asi que para eso hay que usar la linea de comandos.
+
+Se llama nfsmw.toml y no NFS_Most_Wanted.toml aunque renombres el .exe: ese
+nombre sale del nombre interno del proyecto, no del archivo.
+
+
+DENTRO DEL JUEGO
+----------------
+  F3       fps y tiempo de fotograma
+  F4       ajustes
+  `        consola
+
+Mando de Xbox o PlayStation por USB o Bluetooth: funciona directamente.
+Si no responde, lo habitual es que Steam Input o DS4Windows lo capturen antes.
+
+
+SI ALGO FALLA
+-------------
+Todo queda en  logs\  . Las lineas que importan llevan [critical], [error] o
+FATAL.
+
+Si sale "unregistered function at guest address 0x...", APUNTA ESA DIRECCION.
+Es un destino de llamada indirecta que el analisis estatico no puede ver, y
+solo aparece cuando el juego pisa ese camino. Es lo mas util que se puede
+reportar.
+
+Si Windows se queja de que falta un DLL, dilo con el nombre exacto: significa
+que la carpeta se armo incompleta.
+
+Si ves lineas [desatasco], es el arreglo del audio saltando. Una suelta de vez
+en cuando es normal y no molesta. Si salen a montones, dilo: significa que el
+hilo de audio va justo de tiempo en esa maquina y hay algo mas que mirar.
