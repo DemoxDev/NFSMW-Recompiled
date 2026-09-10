@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+
+HERE="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+export LD_LIBRARY_PATH="$HERE/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$HERE/usr/libexec:$HERE/usr/bin:$PATH"
+export QT_PLUGIN_PATH="$HERE/usr/plugins"
+# Force xcb. Desktop sessions often export QT_QPA_PLATFORM=wayland, but this
+# AppImage only ships the xcb plugin (same approach as hells-gate-recomp).
+# Override explicitly with NFSMW_QT_PLATFORM if you need something else.
+export QT_QPA_PLATFORM="${NFSMW_QT_PLATFORM:-xcb}"
+export DISABLE_LSFG="${DISABLE_LSFG:-1}"
+
+exec "$HERE/usr/bin/nfsmw_launcher" "$@"

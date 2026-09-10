@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NFS Most Wanted
+Comment=Native ARM64 launcher for Need for Speed: Most Wanted (Xbox 360 recompiled)
+Exec=nfsmw_launcher
+Icon=nfsmw
+Categories=Game;ActionGame;
+Terminal=false
+StartupNotify=true
