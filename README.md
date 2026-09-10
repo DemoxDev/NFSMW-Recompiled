@@ -151,6 +151,8 @@ work with its own terms.
 Need for Speed and Most Wanted are trademarks of Electronic Arts Inc. This project is
 not affiliated with, endorsed by, or connected to Electronic Arts in any way.
 
+⚠️ IMPORTANT ROM REQUIREMENT: This project strictly requires the Need for Speed: Most Wanted (2005) [Xbox 360] ROM in its PAL Spain version. PAL UK (English) or NTSC (US) versions are not acceptable (for now).
+
 ## Credits
 
 - [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) — the runtime this is built on
