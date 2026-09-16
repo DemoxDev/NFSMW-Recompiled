@@ -18,16 +18,11 @@
 #include <chrono>
 #include <filesystem>
 #include <map>  // VIGILANTE DE CUELGUES - la firma se ordena por id de hilo
+#include <cstdlib>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-
-// Fallos de pagina de la memoria vigilada de la GPU. Es LA cifra que queda
-// por bajar: cada uno sigue costando ~1.100 ciclos. Definidos en el SDK,
-// src/system/xmemory.cpp.
-extern "C" std::atomic<uint64_t> g_violaciones_totales;
-extern "C" std::atomic<uint64_t> g_violaciones_fisicas;
 
 class NfsmwApp : public rex::ReXApp {
  public:
@@ -386,15 +381,25 @@ class NfsmwApp : public rex::ReXApp {
     ++muestras_;
     ++perfil_[lr];
 
-    // En el sitio caliente, con QUE se le esta llamando. r31 y r29 son copias
-    // de los argumentos que hace sub_8258D9B0 nada mas entrar (mr r31,r3 y
-    // mr r29,r5), y r3 es el primer argumento tal cual. Si r31 repite siempre
-    // el mismo valor es un objeto unico -un dispositivo, un contexto-; si r29
-    // cambia sin parar son recursos distintos pasando por el mismo sitio.
-    if (lr == kSitioCaliente) {
-      ++arg_r3_[c.r3.u32];
-      ++arg_r29_[c.r29.u32];
-      ++arg_r31_[c.r31.u32];
+    // PERFIL_TODOS=1: muestrea TODOS los hilos del juego, no solo el
+    // principal. Hace falta cuando el que trabaja no es el principal -en las
+    // peliculas el principal esta bloqueado y quien decodifica es otro hilo-.
+    if (todos_los_hilos_) {
+      for (auto& h : kernel->object_table()->GetObjectsByType<rex::system::XThread>()) {
+        auto* e2 = h->thread_state();
+        if (!e2 || !e2->context()) continue;
+        const auto& c2 = *e2->context();
+        const uint64_t huella = uint64_t(uint32_t(c2.lr)) | (uint64_t(c2.r1.u32) << 32);
+        auto& anterior = huella_por_hilo_[h->thread_id()];
+        // Solo cuenta si el hilo SE HA MOVIDO desde la muestra anterior. Sin
+        // este filtro el histograma lo copan los hilos dormidos en su funcion
+        // de espera, que son mayoria y no consumen nada.
+        if (anterior != huella) {
+          anterior = huella;
+          ++perfil_otros_[static_cast<uint32_t>(c2.lr)];
+          ++muestras_otros_;
+        }
+      }
     }
 
     // ATASCADO O TRABAJANDO: la pregunta que decide todo. Una funcion de
@@ -424,48 +429,25 @@ class NfsmwApp : public rex::ReXApp {
                   100.0 * double(orden[i].second) / double(muestras_), orden[i].first,
                   orden[i].second);
     }
-    VuelcaArgumentos("r3 ", arg_r3_);
-    VuelcaArgumentos("r29", arg_r29_);
-    VuelcaArgumentos("r31", arg_r31_);
-
-    // Fallos de pagina de la memoria vigilada de la GPU. Es lo que queda por
-    // bajar: ya no cuestan 26.000 ciclos cada uno -eso era el parseo de
-    // /proc/self/maps- pero siguen costando ~1.100.
-    const uint64_t cuadros = stats_.frame_count - fotogramas_perfil_;
-    fotogramas_perfil_ = stats_.frame_count;
-    const uint64_t vt = g_violaciones_totales.load(std::memory_order_relaxed);
-    const uint64_t vf = g_violaciones_fisicas.load(std::memory_order_relaxed);
-    const uint64_t dvt = vt - violaciones_totales_previas_;
-    const uint64_t dvf = vf - violaciones_fisicas_previas_;
-    violaciones_totales_previas_ = vt;
-    violaciones_fisicas_previas_ = vf;
-    REXLOG_INFO("[perfil] violaciones de acceso: {} en {} fotogramas = {} por fotograma "
-                "({} de memoria fisica de la GPU, {} por fotograma)",
-                dvt, cuadros, cuadros ? dvt / cuadros : 0, dvf, cuadros ? dvf / cuadros : 0);
-
+    if (todos_los_hilos_ && muestras_otros_ > 100) {
+      std::vector<std::pair<uint32_t, uint64_t>> o2(perfil_otros_.begin(), perfil_otros_.end());
+      const size_t n2 = std::min<size_t>(8, o2.size());
+      std::partial_sort(o2.begin(), o2.begin() + n2, o2.end(),
+                        [](const auto& a, const auto& b) { return a.second > b.second; });
+      REXLOG_INFO("[perfil] TODOS los hilos: {} muestras, {} sitios", muestras_otros_,
+                  perfil_otros_.size());
+      for (size_t i = 0; i < n2; ++i) {
+        REXLOG_INFO("[perfil]   {:5.1f}%  lr=0x{:08X}", 
+                    100.0 * double(o2[i].second) / double(muestras_otros_), o2[i].first);
+      }
+      perfil_otros_.clear();
+      muestras_otros_ = 0;
+    }
     perfil_.clear();
-    arg_r3_.clear();
-    arg_r29_.clear();
-    arg_r31_.clear();
     muestras_ = 0;
     repetidas_ = 0;
   }
 
-  static void VuelcaArgumentos(const char* nombre, const std::map<uint32_t, uint64_t>& h) {
-    if (h.empty()) return;
-    std::vector<std::pair<uint32_t, uint64_t>> orden(h.begin(), h.end());
-    const size_t cuantos = std::min<size_t>(4, orden.size());
-    std::partial_sort(orden.begin(), orden.begin() + cuantos, orden.end(),
-                      [](const auto& a, const auto& b) { return a.second > b.second; });
-    uint64_t total = 0;
-    for (const auto& [_, n] : h) total += n;
-    std::string linea;
-    for (size_t i = 0; i < cuantos; ++i) {
-      linea += fmt::format("0x{:08X} ({:.0f}%)  ", orden[i].first,
-                           100.0 * double(orden[i].second) / double(total));
-    }
-    REXLOG_INFO("[perfil]   {} = {} valores distintos. Top: {}", nombre, h.size(), linea);
-  }
 
   void VigilanteMain() {
     using Reloj = std::chrono::steady_clock;
@@ -598,15 +580,15 @@ class NfsmwApp : public rex::ReXApp {
   // Perfilador, tambien solo del hilo del vigilante.
   static constexpr int kSegundosEntrePerfiles = 20;
   rex::system::object_ref<rex::system::XThread> principal_;
-  static constexpr uint32_t kSitioCaliente = 0x8258D9B8;  // dentro de sub_8258D9B0
   std::map<uint32_t, uint64_t> perfil_;
-  std::map<uint32_t, uint64_t> arg_r3_, arg_r29_, arg_r31_;
+  const bool todos_los_hilos_ = std::getenv("PERFIL_TODOS") != nullptr;
+  std::map<uint32_t, uint64_t> perfil_otros_;
+  uint64_t muestras_otros_ = 0;
+  std::map<uint32_t, uint64_t> huella_por_hilo_;
   uint64_t muestras_ = 0;
   uint64_t repetidas_ = 0;
   uint32_t lr_anterior_ = 0;
   uint32_t r1_anterior_ = 0;
-  uint64_t violaciones_totales_previas_ = 0;
-  uint64_t violaciones_fisicas_previas_ = 0;
   uint64_t fotogramas_perfil_ = 0;
   int desde_perfil_ = 0;
 
