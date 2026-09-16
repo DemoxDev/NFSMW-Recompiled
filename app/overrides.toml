@@ -85,6 +85,15 @@ cr_as_local = true
 # y 0x82866664. Toda la zona 0x8285xxxx-0x8286xxxx parece una tabla de thunks.
 "0x82869668" = { }
 
+# Mismo patron que 0x8285CE80, salidos de la build PAL ENG (454107D9, entry
+# 0x8262E9A8): tail calls (b) que el descubrimiento automatico no reclamaba y
+# la fase Validate rechaza con "target not in any function":
+#   0x8285CED0 <- 0x8286936C y 0x828666B4
+#   0x82869370 <- 0x8286965C
+# Se declara solo el punto de entrada; los limites los deduce Discover.
+"0x8285CED0" = { }
+"0x82869370" = { }
+
 # 0x8262E768 - RETIRADA. No declarar. La explicacion completa, porque el
 # error volvera a aparecer si alguien prueba la build con otra ISO:
 #

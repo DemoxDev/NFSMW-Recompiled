@@ -346,6 +346,17 @@ class NfsmwApp : public rex::ReXApp {
       std::this_thread::sleep_for(std::chrono::seconds(1));
       if (!vigilante_activo_) break;
 
+      // PARCHE LOCAL - contador de fps en el log, sin abrir el F3.
+      //
+      // El proveedor del F3 solo se consulta con el overlay abierto, y en
+      // corridas automaticas no hay nadie delante de la pantalla. Se muestrea
+      // aqui tambien, una vez por segundo; se imprime cada cinco.
+      MuestreaFotograma();
+      if (++desde_log_fps_ >= 5) {
+        desde_log_fps_ = 0;
+        REXLOG_INFO("[fps] {:5.1f} ({:5.1f} ms)", stats_.fps, stats_.frame_time_ms);
+      }
+
       auto* kernel = rex::system::kernel_state();
       if (!kernel) continue;
 
@@ -433,6 +444,7 @@ class NfsmwApp : public rex::ReXApp {
   double suave_ms_ = 0.0;
   uint64_t fotogramas_ = 0;
   bool tiene_anterior_ = false;
+  int desde_log_fps_ = 0;
 
   std::thread vigilante_;
   std::atomic<bool> vigilante_activo_{false};
