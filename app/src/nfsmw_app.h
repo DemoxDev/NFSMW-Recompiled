@@ -9,6 +9,7 @@
 #include <rex/logging.h>
 #include <rex/rex_app.h>
 #include <rex/ui/overlay/debug_overlay.h>
+#include <rex/ui/presenter.h>  // CONTADOR DE FPS - fotogramas del juego
 #include <rex/system/kernel_state.h>  // VIGILANTE DE CUELGUES
 #include <rex/system/xthread.h>       // VIGILANTE DE CUELGUES
 
@@ -17,6 +18,7 @@
 #include <chrono>
 #include <filesystem>
 #include <map>  // VIGILANTE DE CUELGUES - la firma se ordena por id de hilo
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -167,8 +169,10 @@ class NfsmwApp : public rex::ReXApp {
     // exposicion al maximo: imagen lavada y sol reventado.
     PonerSiNadieLoPidio("readback_resolve", "fast");
 
-    // Contador de fps del overlay de F3, ver mas abajo.
-    SetGuestFrameStats([this] { return MuestreaFotograma(); });
+    // Contador de fps del overlay de F3, ver mas abajo. Devuelve lo ultimo
+    // que midio el vigilante; no mide aqui, para que abrir el overlay no
+    // cambie el numero que se esta leyendo.
+    SetGuestFrameStats([this] { return stats_; });
 
     // Vigilante de cuelgues, ver mas abajo.
     ArrancarVigilante();
@@ -208,34 +212,36 @@ class NfsmwApp : public rex::ReXApp {
   //
   //  El (2) es la puerta que si se puede abrir sin tocar el SDK.
   //
-  //  El proveedor lo llama OnDraw del overlay una vez por fotograma mientras
-  //  este abierto, asi que no hace falta ningun gancho de frame: basta con
-  //  mirar el reloj cada vez que preguntan. Media movil exponencial, porque el
-  //  valor instantaneo salta tanto que no se puede leer ni comparar.
+  //  DE DONDE SALE EL NUMERO, Y POR QUE NO DE UN RELOJ DE AQUI.
+  //  La primera version miraba el reloj cada vez que alguien preguntaba y daba
+  //  el hueco entre dos preguntas por bueno como si fuera un fotograma. Con el
+  //  overlay cerrado -toda corrida automatica- el unico que preguntaba era el
+  //  vigilante, una vez por segundo: dt salia ~1000 ms, el filtro lo tiraba, y
+  //  el log escribia 0.0 fps para siempre. No era lentitud, era el medidor.
   //
-  //  Mide los fotogramas que presenta la ventana. Solo cuenta con el overlay
-  //  abierto: al cerrarlo deja de haber llamadas y la media se congela.
+  //  El intento siguiente -un dialogo de ImGui contando en su OnDraw- si daba
+  //  un numero, pero el EQUIVOCADO: contaba repintados de la INTERFAZ, que van
+  //  por libre y llegan a 1770 por segundo mientras el juego da 17-30.
+  //
+  //  Un fotograma del juego solo existe en un sitio: cuando el presentador
+  //  acepta una imagen nueva del guest. Eso es lo que cuenta el contador del
+  //  SDK -PARCHE LOCAL en ui/presenter.h- y lo que se lee aqui. Se calcula por
+  //  diferencia sobre el tic de un segundo del vigilante, asi que no hace
+  //  falta ningun gancho por fotograma ni media movil: el intervalo es real.
   // ==========================================================================
-  rex::ui::FrameStats MuestreaFotograma() {
-    using Reloj = std::chrono::steady_clock;
-    const auto ahora = Reloj::now();
-
-    const double dt_ms =
-        std::chrono::duration<double, std::milli>(ahora - ultimo_).count();
-    // Se descarta el primer intervalo y cualquiera absurdo: al reabrir el
-    // overlay, el "anterior" abarca todo el rato que estuvo cerrado.
-    const bool valido = tiene_anterior_ && dt_ms > 0.0 && dt_ms < 1000.0;
-
-    ultimo_ = ahora;
-    tiene_anterior_ = true;
-    if (!valido) {
+  rex::ui::FrameStats MideFotogramas(double dt_s) {
+    const auto* presentador =
+        runtime() && runtime()->graphics_system() ? runtime()->graphics_system()->presenter() : nullptr;
+    if (!presentador || dt_s <= 0.0) {
       return stats_;
     }
+    const uint64_t ahora = presentador->guest_frames_refreshed();
+    const uint64_t nuevos = ahora - fotogramas_previos_;
+    fotogramas_previos_ = ahora;
 
-    suave_ms_ = (suave_ms_ <= 0.0) ? dt_ms : (suave_ms_ * 0.9 + dt_ms * 0.1);
-    stats_.frame_time_ms = suave_ms_;
-    stats_.fps = (suave_ms_ > 0.0) ? (1000.0 / suave_ms_) : 0.0;
-    stats_.frame_count = ++fotogramas_;  // el overlay no dibuja si esto es 0
+    stats_.fps = double(nuevos) / dt_s;
+    stats_.frame_time_ms = stats_.fps > 0.0 ? 1000.0 / stats_.fps : 0.0;
+    stats_.frame_count = ahora;  // el overlay no dibuja si esto es 0
     return stats_;
   }
 
@@ -327,6 +333,85 @@ class NfsmwApp : public rex::ReXApp {
     }
   }
 
+  // ==========================================================================
+  //  PERFILADOR DE CODIGO DEL JUEGO
+  //
+  //  EL PROBLEMA. El juego va a 15 fps -66 ms por fotograma- con el hilo
+  //  principal al 90% de un nucleo y quince nucleos sin hacer nada. O sea que
+  //  el limite es un solo hilo ejecutando codigo del juego. Falta saber QUE
+  //  codigo, y ninguna herramienta de fuera lo dice: perf no esta instalado,
+  //  ptrace_scope=1 impide que un perfilador hermano se enganche, y Tracy pide
+  //  recompilar los 272 ficheros del recompilado y un visor aparte.
+  //
+  //  COMO SE MIDE SIN NADA DE ESO. El codigo generado escribe ctx.lr = <sitio
+  //  al que se vuelve> justo antes de CADA llamada. Asi que lr, leido a menudo,
+  //  es un contador de programa a escala de llamada: dice por que sitio del
+  //  juego va el hilo. Y el contexto de cada hilo ya es accesible desde aqui;
+  //  el vigilante de abajo lleva leyendolo desde el principio.
+  //
+  //  Mil muestras por segundo cuestan leer un entero mil veces: nada medible.
+  //
+  //  LO QUE NO ES. Las direcciones salen a resolucion de sitio-de-llamada, no
+  //  de instruccion, y leer lr mientras el otro hilo corre es una carrera
+  //  benigna -lectura alineada de 8 bytes en x86-64-. Para decidir DONDE mirar
+  //  sobra; para microoptimizar una funcion concreta, no.
+  //
+  //  COMO SE LEE EL VOLCADO. Cada direccion se busca tal cual en
+  //  generated/default/: aparece como "// bl 0x8...." en el sitio de llamada,
+  //  dentro de la funcion sub_XXXXXXXX que se la esta comiendo.
+  // ==========================================================================
+  void MuestreaLr() {
+    auto* kernel = rex::system::kernel_state();
+    if (!kernel) return;
+    if (!principal_) {
+      for (auto& h : kernel->object_table()->GetObjectsByType<rex::system::XThread>()) {
+        if (h->main_thread()) {
+          principal_ = h;
+          break;
+        }
+      }
+      if (!principal_) return;
+    }
+    auto* estado = principal_->thread_state();
+    if (!estado || !estado->context()) return;
+    const auto& c = *estado->context();
+    const uint32_t lr = static_cast<uint32_t>(c.lr);
+    const uint32_t r1 = c.r1.u32;
+    ++muestras_;
+    ++perfil_[lr];
+
+    // ATASCADO O TRABAJANDO: la pregunta que decide todo. Una funcion de
+    // cuarenta instrucciones sin bucles no puede comerse 45 ms por fotograma
+    // ejecutando; o la llaman millones de veces, o el hilo esta PARADO ahi.
+    // Si lr Y el puntero de pila repiten valor de una muestra a la siguiente,
+    // es que no se ha movido: esta esperando, no calculando.
+    if (lr == lr_anterior_ && r1 == r1_anterior_) {
+      ++repetidas_;
+    }
+    lr_anterior_ = lr;
+    r1_anterior_ = r1;
+  }
+
+  void VuelcaPerfil() {
+    if (muestras_ < 100) return;
+    std::vector<std::pair<uint32_t, uint64_t>> orden(perfil_.begin(), perfil_.end());
+    std::partial_sort(orden.begin(), orden.begin() + std::min<size_t>(15, orden.size()),
+                      orden.end(),
+                      [](const auto& a, const auto& b) { return a.second > b.second; });
+    REXLOG_INFO("[perfil] {} muestras del hilo principal, {} sitios distintos, "
+                "{:.1f}% sin moverse respecto a la anterior (lr y r1 iguales). "
+                "Los que mas salen:",
+                muestras_, perfil_.size(), 100.0 * double(repetidas_) / double(muestras_));
+    for (size_t i = 0; i < std::min<size_t>(15, orden.size()); ++i) {
+      REXLOG_INFO("[perfil]   {:5.1f}%  lr=0x{:08X}  ({} muestras)",
+                  100.0 * double(orden[i].second) / double(muestras_), orden[i].first,
+                  orden[i].second);
+    }
+    perfil_.clear();
+    muestras_ = 0;
+    repetidas_ = 0;
+  }
+
   void VigilanteMain() {
     using Reloj = std::chrono::steady_clock;
 
@@ -343,18 +428,29 @@ class NfsmwApp : public rex::ReXApp {
     bool avisado = false;
 
     while (vigilante_activo_) {
-      std::this_thread::sleep_for(std::chrono::seconds(1));
+      // El segundo de espera se gasta muestreando, no durmiendo de una vez.
+      // Ver MuestreaLr: mil muestras por segundo del hilo principal.
+      for (int ms = 0; ms < 1000 && vigilante_activo_; ++ms) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        MuestreaLr();
+      }
       if (!vigilante_activo_) break;
+
+      if (++desde_perfil_ >= kSegundosEntrePerfiles) {
+        desde_perfil_ = 0;
+        VuelcaPerfil();
+      }
 
       // PARCHE LOCAL - contador de fps en el log, sin abrir el F3.
       //
-      // El proveedor del F3 solo se consulta con el overlay abierto, y en
-      // corridas automaticas no hay nadie delante de la pantalla. Se muestrea
-      // aqui tambien, una vez por segundo; se imprime cada cinco.
-      MuestreaFotograma();
+      // El tic de este bucle es de un segundo y es el propio intervalo de
+      // medida: fotogramas nuevos del juego partido por el tiempo que ha
+      // pasado de verdad. Se imprime cada cinco.
+      const auto s = MideFotogramas(1.0);
       if (++desde_log_fps_ >= 5) {
         desde_log_fps_ = 0;
-        REXLOG_INFO("[fps] {:5.1f} ({:5.1f} ms)", stats_.fps, stats_.frame_time_ms);
+        REXLOG_INFO("[fps] {:5.1f} ({:5.1f} ms, {} fotogramas)", s.fps, s.frame_time_ms,
+                    s.frame_count);
       }
 
       auto* kernel = rex::system::kernel_state();
@@ -439,12 +535,20 @@ class NfsmwApp : public rex::ReXApp {
     }
   }
 
+  // Solo los toca el hilo del vigilante, que es el unico que mide.
   rex::ui::FrameStats stats_{};
-  std::chrono::steady_clock::time_point ultimo_{};
-  double suave_ms_ = 0.0;
-  uint64_t fotogramas_ = 0;
-  bool tiene_anterior_ = false;
+  uint64_t fotogramas_previos_ = 0;
   int desde_log_fps_ = 0;
+
+  // Perfilador, tambien solo del hilo del vigilante.
+  static constexpr int kSegundosEntrePerfiles = 20;
+  rex::system::object_ref<rex::system::XThread> principal_;
+  std::map<uint32_t, uint64_t> perfil_;
+  uint64_t muestras_ = 0;
+  uint64_t repetidas_ = 0;
+  uint32_t lr_anterior_ = 0;
+  uint32_t r1_anterior_ = 0;
+  int desde_perfil_ = 0;
 
   std::thread vigilante_;
   std::atomic<bool> vigilante_activo_{false};
