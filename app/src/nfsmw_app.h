@@ -471,6 +471,7 @@ class NfsmwApp : public rex::ReXApp {
     int desde_ultimo_volcado = 0;
     int desde_instantanea = 0;
     bool avisado = false;
+    auto tic_anterior = Reloj::now();
 
     while (vigilante_activo_) {
       // The one-second wait is spent sampling, not sleeping all at once.
@@ -480,6 +481,14 @@ class NfsmwApp : public rex::ReXApp {
         MuestreaLr();
       }
       if (!vigilante_activo_) break;
+
+      // The "second" above is a thousand sleep(1) calls PLUS the sampling
+      // cost: measured, ~1.06 s. Assuming 1.0 inflated every fps figure by
+      // ~6% — menus read a flat "63" when they actually ran at 60. Measure
+      // the real interval instead.
+      const auto ahora = Reloj::now();
+      const double dt_s = std::chrono::duration<double>(ahora - tic_anterior).count();
+      tic_anterior = ahora;
 
       if (++desde_perfil_ >= kSegundosEntrePerfiles) {
         desde_perfil_ = 0;
@@ -491,7 +500,7 @@ class NfsmwApp : public rex::ReXApp {
       // This loop's tick is one second and is itself the measurement
       // interval: new game frames divided by the time that's actually
       // passed. Printed every five ticks.
-      const auto s = MideFotogramas(1.0);
+      const auto s = MideFotogramas(dt_s);
       if (++desde_log_fps_ >= 5) {
         desde_log_fps_ = 0;
         REXLOG_INFO("[fps] {:5.1f} ({:5.1f} ms, {} fotogramas)", s.fps, s.frame_time_ms,
