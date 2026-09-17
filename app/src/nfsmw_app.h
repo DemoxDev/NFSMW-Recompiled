@@ -181,6 +181,30 @@ class NfsmwApp : public rex::ReXApp {
     // the game receives garbage, concludes the scene is pitch black, and
     // cranks exposure to the max: washed-out image and blown-out sun.
     PonerSiNadieLoPidio("readback_resolve", "fast");
+    // ...but only for the small targets the game actually reads back. Sampled
+    // in a race: ~25 resolves per frame from 16 KB to 10 MB, all memcpy'd to
+    // guest memory, ~2.4 GB/s = 12-17% of the command processor thread. With
+    // the cap only the 16 KB and 60 KB ones are copied; exposure still works
+    // (checked against a screenshot) and the CP thread dropped from ~78% to
+    // ~62% of a core at 60 fps. If the sun ever blows out again, raise this.
+    PonerSiNadieLoPidio("readback_resolve_max_bytes", "65536");
+
+    // Present from the UI thread, never inline on the GPU command processor
+    // thread. The CP thread is the frame-rate bottleneck (the game's main
+    // thread spins waiting for ring space behind it), and with no dialog
+    // registered the presenter paints inline on it: measured 93% CP and
+    // 57-59 fps in a scene that holds 60 with this at 85%. The overlay got
+    // the same effect for free because any dialog forces the UI-thread path;
+    // this makes it the default with the overlay off too.
+    PonerSiNadieLoPidio("host_present_from_non_ui_thread", "false");
+
+    // A guest thread polls with Sleep(0) all race long; as sched_yield that is
+    // a whole core burnt (97%, a third of it in the kernel) and one more CPU
+    // for every mprotect TLB shootdown the command processor issues. 50 us of
+    // real sleep per poll: 97% -> 9% of a core, process 317% -> 226%, fps
+    // unchanged at a locked 60 in the same scene. Latency added per poll is
+    // ~60 us against a 16.7 ms frame. 0 restores the yield.
+    PonerSiNadieLoPidio("guest_sleep0_us", "50");
 
     // Fps counter for the F3 overlay, see below. Returns whatever the
     // watchdog last measured; it doesn't measure here, so opening the
