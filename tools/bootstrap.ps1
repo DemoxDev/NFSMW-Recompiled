@@ -1,6 +1,6 @@
 # NFSMW Recomp - bootstrap (Windows)
-# Verifica prerequisitos, clona el ReXGlue SDK y lo compila e instala.
-# Uso:  .\tools\bootstrap.ps1
+# Checks prerequisites, clones the ReXGlue SDK, and builds and installs it.
+# Usage:  .\tools\bootstrap.ps1
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
@@ -32,7 +32,7 @@ if ($missing.Count -gt 0) {
     exit 1
 }
 
-# Clang debe ser 20+
+# Clang must be 20+
 $clangVer = (clang --version | Select-String -Pattern '(\d+)\.\d+\.\d+' | ForEach-Object { $_.Matches[0].Groups[1].Value })
 if ([int]$clangVer -lt 20) {
     Write-Host "Clang $clangVer detectado; ReXGlue necesita 20 o superior." -ForegroundColor Red

@@ -1,19 +1,19 @@
 #!/bin/bash
-# Sondeo COMPLETO: lleva el juego del arranque hasta la carrera solito.
+# FULL probe: takes the game from boot to the race all by itself.
 #
-# Cada pasada:
-#   1. lanza el juego con ventana (X11 para poder mandarle teclas),
-#   2. le mete ENTER en bucle (start -> cargar save -> empezar carrera),
-#   3. cuando revienta, saca del log la direccion del [FATAL]
-#      ("Call to invalid or unregistered function" o
+# Each pass:
+#   1. launches the game with a window (X11 so it can be sent keystrokes),
+#   2. feeds it ENTER in a loop (start -> load save -> start race),
+#   3. when it crashes, pulls the [FATAL] address out of the log
+#      ("Call to invalid or unregistered function" or
 #      "Unresolved call/branch from X to Y"),
-#   4. la declara en app/huecos.toml, rehace codegen + build, y repite.
+#   4. declares it in app/huecos.toml, redoes codegen + build, and repeats.
 #
-# Todo corre en un escritorio VIRTUAL (Xvfb en :99): la ventana del juego
-# nunca aparece en la pantalla del usuario y las teclas inyectadas por
-# xdotool tampoco le roban el foco.
+# Everything runs on a VIRTUAL desktop (Xvfb on :99): the game window never
+# appears on the user's screen, and the keystrokes injected by xdotool don't
+# steal its focus either.
 #
-# Uso:  REXGLUE=... bash tools/sondeo.sh [pasadas]
+# Usage:  REXGLUE=... bash tools/sondeo.sh [passes]
 set -u
 cd "$(dirname "$0")/.."
 
@@ -21,7 +21,7 @@ REXGLUE=${REXGLUE:-rexglue}
 DIR_APP=app
 DIR_BUILD=build
 TOPE=${1:-30}
-# Segundos por pasada: tiene que dar tiempo a start -> save -> cargar carrera
+# Seconds per pass: has to give enough time for start -> save -> load race
 RUN_SEG=${RUN_SEG:-90}
 DISPLAY_VIRTUAL=:99
 RES_VIRTUAL=${RES_VIRTUAL:-1280x720x24}
@@ -35,7 +35,7 @@ if ! command -v xdotool >/dev/null 2>&1; then
     exit 1
 fi
 
-# Escritorio virtual; queda corriendo entre pasadas.
+# Virtual desktop; stays running between passes.
 if ! DISPLAY=$DISPLAY_VIRTUAL timeout 1 xset q >/dev/null 2>&1; then
     Xvfb $DISPLAY_VIRTUAL -screen 0 "$RES_VIRTUAL" >/dev/null 2>&1 &
     XVFB_PID=$!
@@ -49,13 +49,13 @@ trap '[ -n "$XVFB_PID" ] && kill "$XFB_PID" 2>/dev/null' EXIT
 for ((i=1; i<=TOPE; i++)); do
     rm -f "$DIR_BUILD/logs/nfsmw_"*.log 2>/dev/null
 
-    # Lanzar con X11 en el escritorio virtual
+    # Launch with X11 on the virtual desktop
     ( cd "$DIR_BUILD" && DISPLAY=$DISPLAY_VIRTUAL timeout "$RUN_SEG" ./nfsmw --video_driver=x11 >/dev/null 2>&1 ) &
     JUEGO=$!
 
-    # Spam de A (Space con mnk_mode; keybind_a) mientras el juego viva:
-    # salta menus Y cutscenes. Varias pulsaciones por segundo. Con foco por
-    # XSetInputFocus (no hay gestor de ventanas en el escritorio virtual).
+    # Spam A (Space with mnk_mode; keybind_a) while the game is alive:
+    # skips menus AND cutscenes. Several presses per second. Focus is set
+    # via XSetInputFocus (there's no window manager on the virtual desktop).
     ( while kill -0 "$JUEGO" 2>/dev/null; do
           VENTANA=$(DISPLAY=$DISPLAY_VIRTUAL xdotool search --name 'nfsmw' 2>/dev/null | head -1)
           if [ -n "$VENTANA" ]; then
@@ -71,10 +71,10 @@ for ((i=1; i<=TOPE; i++)); do
     kill "$SPAM" 2>/dev/null
     wait 2>/dev/null
 
-    # 1) llamada indirecta a funcion no registrada
+    # 1) indirect call to an unregistered function
     DIR=$(grep -h "Call to invalid or unregistered function at guest address" \
               "$DIR_BUILD/logs/nfsmw_"*.log 2>/dev/null | tail -1 | grep -o "0x[0-9A-F]\{8\}" | tail -1)
-    # 2) trampa de salto sin resolver: importa el OBJETIVO (to)
+    # 2) unresolved branch trap: import the TARGET (to)
     BRANCH=$(grep -hE "FATAL.*Unresolved (call|branch) from" \
                  "$DIR_BUILD/logs/nfsmw_"*.log 2>/dev/null | tail -1 | grep -o "to 0x[0-9A-F]\{8\}" | grep -o "0x[0-9A-F]\{8\}")
     DIR=${DIR:-$BRANCH}

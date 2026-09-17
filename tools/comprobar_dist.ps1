@@ -1,15 +1,15 @@
 # =============================================================================
-#  Comprueba que build\ -la carpeta portable- sea REALMENTE autonoma.
+#  Checks that build\ -the portable folder- is REALLY self-contained.
 #
-#  No adivina: lee la tabla de importaciones PE de cada .exe y .dll de la
-#  carpeta, sigue las dependencias en cadena, y para cada DLL decide si
+#  It doesn't guess: it reads the PE import table of every .exe and .dll in
+#  the folder, follows the dependency chain, and for each DLL decides whether
 #
-#    - esta en la propia carpeta            -> bien, viaja con el juego
-#    - es una DLL de Windows                -> bien, esta en cualquier equipo
-#    - no es ni una cosa ni la otra         -> FALTA, y lo dice por su nombre
+#    - it's in the folder itself             -> fine, it ships with the game
+#    - it's a Windows DLL                    -> fine, it's on any machine
+#    - it's neither one nor the other        -> MISSING, and says so by name
 #
-#  Es la unica forma honesta de responder "funcionara en un PC limpio" sin
-#  tener delante un PC limpio.
+#  It's the only honest way to answer "will this work on a clean PC" without
+#  having a clean PC in front of you.
 #
 #      powershell -ExecutionPolicy Bypass -File tools\comprobar_dist.ps1
 #      powershell -ExecutionPolicy Bypass -File tools\comprobar_dist.ps1 -Dist "D:\otra\carpeta"
@@ -33,11 +33,11 @@ if (-not (Test-Path -LiteralPath $Dist)) {
 }
 
 # -----------------------------------------------------------------------------
-#  Lector de la tabla de importaciones PE.
+#  PE import table reader.
 #
-#  Se hace a mano y no con dumpbin a proposito: dumpbin viene con Visual
-#  Studio, y todo el sentido de este script es comprobar cosas SIN suponer que
-#  hay herramientas de desarrollo instaladas.
+#  It's done by hand and not with dumpbin on purpose: dumpbin comes with
+#  Visual Studio, and the whole point of this script is to check things
+#  WITHOUT assuming that dev tools are installed.
 # -----------------------------------------------------------------------------
 function Get-PeImports([string]$Ruta) {
     $b = [System.IO.File]::ReadAllBytes($Ruta)
@@ -55,7 +55,7 @@ function Get-PeImports([string]$Ruta) {
     $impRva = [BitConverter]::ToUInt32($b, $dd + 8)
     if ($impRva -eq 0) { return @() }
 
-    # Secciones, para traducir RVA a desplazamiento en el archivo.
+    # Sections, to translate RVA to a file offset.
     $secs = @()
     $so = $opt + $optsz
     for ($i = 0; $i -lt $nsec; $i++) {
@@ -92,10 +92,10 @@ function Get-PeImports([string]$Ruta) {
 }
 
 # -----------------------------------------------------------------------------
-#  Que cuenta como "ya viene con Windows".
+#  What counts as "already comes with Windows".
 #
-#  Los api-ms-win-* son el UCRT y las API sets, parte de Windows 10 y 11. El
-#  resto es la lista de DLL del sistema que estos binarios tocan.
+#  The api-ms-win-* ones are the UCRT and the API sets, part of Windows 10 and
+#  11. The rest is the list of system DLLs that these binaries touch.
 # -----------------------------------------------------------------------------
 $deWindows = @(
     'kernel32.dll','user32.dll','gdi32.dll','advapi32.dll','shell32.dll','ole32.dll',
@@ -105,10 +105,10 @@ $deWindows = @(
     'cfgmgr32.dll','ntdll.dll','rpcrt4.dll','secur32.dll','userenv.dll',
     'msvcrt.dll','dbghelp.dll','wintrust.dll','iphlpapi.dll','psapi.dll',
     'xinput1_4.dll','xinput9_1_0.dll','avrt.dll','mmdevapi.dll','propsys.dll',
-    # El lanzador es un ejecutable de .NET y lo unico que importa de verdad es
-    # mscoree.dll, el arranque del Common Language Runtime. Viene con Windows
-    # desde el XP SP3. Sin esto en la lista, la comprobacion daba la carpeta por
-    # rota justo despues de armarla bien.
+    # The launcher is a .NET executable and the only thing it really imports
+    # is mscoree.dll, the Common Language Runtime bootstrap. It's come with
+    # Windows since XP SP3. Without this in the list, the check was reporting
+    # the folder as broken right after assembling it correctly.
     'mscoree.dll','mscoreei.dll'
 )
 
@@ -124,11 +124,11 @@ Write-Host ''
 Write-Host "  $Dist"
 Write-Host ''
 
-# ---- Contenido --------------------------------------------------------------
-# @() NO ES DECORATIVO. Get-ChildItem devuelve un objeto SUELTO cuando hay un
-# solo resultado, no un array de uno. Con Set-StrictMode, pedirle .Count a ese
-# objeto suelto lanza PropertyNotFoundStrict y el script muere. Envolver en @()
-# fuerza array siempre, tenga 0, 1 o 20 elementos.
+# ---- Contents ---------------------------------------------------------------
+# @() IS NOT DECORATIVE. Get-ChildItem returns a LOOSE object when there's a
+# single result, not a one-element array. With Set-StrictMode, asking that
+# loose object for .Count throws PropertyNotFoundStrict and the script dies.
+# Wrapping in @() forces an array always, whether it has 0, 1, or 20 elements.
 $exes = @(Get-ChildItem -LiteralPath $Dist -File -Filter '*.exe')
 $isos = @(Get-ChildItem -LiteralPath $Dist -File -Filter '*.iso')
 $dlls = @(Get-ChildItem -LiteralPath $Dist -File -Filter '*.dll')
@@ -149,7 +149,7 @@ if ($exes.Count -eq 0) {
     Write-Host ''
 }
 
-# ---- Dependencias en cadena -------------------------------------------------
+# ---- Chained dependencies ----------------------------------------------------
 Write-Host 'DEPENDENCIAS'
 
 $pendientes = New-Object System.Collections.Generic.Queue[string]
@@ -201,7 +201,7 @@ if ($faltan.Count -eq 0) {
 }
 Write-Host ''
 
-# ---- ISO --------------------------------------------------------------------
+# ---- ISO ----------------------------------------------------------------------
 Write-Host 'ISO'
 if ($isos.Count -eq 0) {
     Write-Host '   [  ] No hay ninguna. Hay que copiarla aqui antes de jugar.' -ForegroundColor DarkYellow
@@ -212,11 +212,11 @@ if ($isos.Count -eq 0) {
 }
 Write-Host ''
 
-# ---- Rutas absolutas dentro del ejecutable ----------------------------------
+# ---- Absolute paths embedded in the executable -------------------------------
 #
-# Busca cadenas tipo "C:\Users\..." incrustadas en los binarios. Los caminos de
-# depuracion del compilador salen aqui y son inofensivos, pero si alguna ruta
-# de datos quedo fija, este es el sitio donde se ve.
+# Looks for strings like "C:\Users\..." embedded in the binaries. The
+# compiler's debug paths show up here and are harmless, but if some data path
+# ended up hardcoded, this is where it would show.
 Write-Host 'RUTAS ABSOLUTAS INCRUSTADAS'
 $sospechosas = @()
 foreach ($f in $exes) {
@@ -235,7 +235,7 @@ if ($sospechosas.Count -eq 0) {
 }
 Write-Host ''
 
-# ---- Veredicto --------------------------------------------------------------
+# ---- Verdict ----------------------------------------------------------------
 Write-Host '============================================'
 if ($problemas.Count -eq 0) {
     Write-Host '  LA CARPETA ES AUTONOMA' -ForegroundColor Green
