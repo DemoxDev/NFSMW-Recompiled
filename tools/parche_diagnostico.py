@@ -1,29 +1,29 @@
 #!/usr/bin/env python3
 """
-Dos parches al SDK sobre hilos y memoria.  (version 3)
+Two patches to the SDK around threads and memory.  (version 3)
 
-    python tools/parche_diagnostico.py            aplicar
+    python tools/parche_diagnostico.py            apply
     python tools/parche_diagnostico.py --estado
     python tools/parche_diagnostico.py --revertir
 
-Toca dos ficheros del SDK:
-    src/system/xmemory.cpp    el mensaje de la violacion de acceso
-    src/system/xthread.cpp    el arranque de cada hilo del guest
+Touches two SDK files:
+    src/system/xmemory.cpp    the access-violation message
+    src/system/xthread.cpp    the startup of each guest thread
 
-Guarda un .original de cada uno la primera vez y es idempotente. Si detecta
-una version ANTERIOR de este mismo parche, la revierte antes de aplicar la
-nueva: asi se puede reaplicar encima sin acumular capas.
+Keeps an .original of each the first time and is idempotent. If it detects
+an EARLIER version of this same patch, it reverts it before applying the new
+one: that way it can be reapplied on top without stacking layers.
 
 
-QUE SE SABE YA, Y POR QUE HACE FALTA LA VERSION 2
-=================================================
+WHAT'S ALREADY KNOWN, AND WHY VERSION 2 IS NEEDED
+====================================================
 
-La version 1 contesto la primera pregunta. El log del crash paso de esto:
+Version 1 answered the first question. The crash log went from this:
 
     Unhandled guest access violation: read of guest 0x00000000
       on thread 0xF8000028
 
-a esto:
+to this:
 
     [hilo guest] arrancando: entrada=0x8262E768 start_address=0x8262E768
                  contexto=0x00000000 trampolin_xapi=0x00000000 pila=262144
@@ -32,77 +32,81 @@ a esto:
     [contexto ppc] lr=0x00000000 ultimo_salto_indirecto=0x00000000
                    r1=0x70190000 r3=0 r4=0 r5=0 ...
 
-Y eso, en 20 ejecuciones de 20, siempre igual. Lo que dice:
+And that, in 20 out of 20 runs, was always the same. What it tells us:
 
-  - 0x8262E768 NO es un hilo secundario: es el PUNTO DE ENTRADA DEL JUEGO.
-    principal=true, y start_address sale de la cabecera del XEX, no de
-    ninguna heuristica. Nunca llega a arrancar un segundo hilo.
-  - lr=0 y ultimo_salto_indirecto=0: muere en las primeras instrucciones,
-    antes de llamar a nada.
-  - r1 es una pila valida (0x70190000, dentro de 0x70000000-0x7F000000).
+  - 0x8262E768 is NOT a secondary thread: it's the GAME'S ENTRY POINT.
+    principal=true, and start_address comes from the XEX header, not from
+    any heuristic. It never gets as far as starting a second thread.
+  - lr=0 and ultimo_salto_indirecto=0: it dies in the first few
+    instructions, before calling anything.
+  - r1 is a valid stack (0x70190000, within 0x70000000-0x7F000000).
 
-Y lo que apunta a la causa: las DOS direcciones que fallan son 0x00000000 y
-0x00000100. No son numeros cualesquiera. En el propio xthread.cpp del SDK,
-justo encima de donde se reserva el PCR, esta el mapa:
+And what points to the cause: the TWO addresses that fail are 0x00000000 and
+0x00000100. These aren't arbitrary numbers. In the SDK's own xthread.cpp,
+right above where the PCR is allocated, is this map:
 
     // 0x000: pointer to tls data
     // 0x100: pointer to TEB(?)
 
-O sea que las dos lecturas que revientan son 0(r13) y 0x100(r13) con r13
-valiendo CERO. r13 es el puntero al PCR, y lo pone ThreadState al construirse:
+So the two reads that crash are 0(r13) and 0x100(r13) with r13 equal to
+ZERO. r13 is the pointer to the PCR, and ThreadState sets it on
+construction:
 
     context_->r13.u64 = pcr_address;   // src/system/thread_state.cpp
 
-La hipotesis, entonces, es que r13 llega a cero al codigo recompilado. Lo que
-NO se sabe es si llega a cero porque pcr_address_ es cero -y entonces el fallo
-esta en la reserva de memoria del guest- o porque el contexto se pierde entre
-la creacion del hilo y la llamada -y entonces el fallo esta en otro sitio-.
+The hypothesis, then, is that r13 ends up zero in the recompiled code. What
+is NOT known is whether it reaches zero because pcr_address_ is zero -in
+which case the bug is in the guest memory allocation- or because the
+context gets lost somewhere between the thread's creation and the call -in
+which case the bug is elsewhere.
 
-Un solo registro separa las dos historias. Por eso esta version 2.
-
-
-LO QUE ANADE LA VERSION 2
-=========================
-
-1. r13 en el volcado de registros, junto con r2, r12 y r30. Y ademas
-   pcr_ptr() y tls_ptr() leidos del propio XThread, que es el valor que el
-   SDK CREE haber puesto. Si pcr_ptr() trae un valor y r13 vale cero, el
-   contexto se esta perdiendo por el camino. Si los dos valen cero, la
-   reserva del PCR fallo en silencio.
-
-2. La linea de "arrancando" tambien lleva ahora r13, el PCR y el TLS. Esto es
-   lo importante: esa linea sale SIEMPRE, tanto si el arranque va bien como si
-   no. Asi se puede comparar directamente un arranque bueno con uno malo
-   -misma linea, dos maquinas- en vez de mirar solo el que falla.
-
-3. Si el PCR no es cero, se vuelcan las dos palabras del guest que estan en
-   PCR+0x00 y PCR+0x100, que son justo las que el juego intenta leer.
+A single register separates the two stories. Hence this version 2.
 
 
-LO QUE ANADE LA VERSION 3, Y NO ES DIAGNOSTICO SINO UN ARREGLO
-==============================================================
+WHAT VERSION 2 ADDS
+=====================
 
-Leyendo el log de una partida real aparecio esto:
+1. r13 in the register dump, along with r2, r12, and r30. Plus pcr_ptr() and
+   tls_ptr() read straight from XThread itself, which is the value the SDK
+   BELIEVES it set. If pcr_ptr() has a value and r13 is zero, the context is
+   getting lost along the way. If both are zero, the PCR allocation failed
+   silently.
 
-    44.803 lineas en 44 segundos, TODAS la misma:
+2. The "starting" line now also carries r13, the PCR, and the TLS. This is
+   the important part: that line is printed ALWAYS, whether startup goes
+   well or not. That way a good startup can be compared directly against a
+   bad one -same line, two machines- instead of only looking at the one that
+   fails.
+
+3. If the PCR isn't zero, the two guest words at PCR+0x00 and PCR+0x100 are
+   dumped, which are exactly the ones the game tries to read.
+
+
+WHAT VERSION 3 ADDS, AND IT ISN'T DIAGNOSTICS BUT A FIX
+==========================================================
+
+While reading the log of a real playthrough, this showed up:
+
+    44,803 lines in 44 seconds, ALL the same:
         [warning] [sys] Too few processor cores - scheduling will be wonky
 
-El 100% del log. Mil avisos por segundo, 105 MB en un cuarto de hora.
+100% of the log. A thousand warnings a second, 105 MB in a quarter hour.
 
-Sale de XThread::SetActiveCpu, que el juego llama cada vez que crea un hilo o
-le cambia la CPU, y el SDK lo escribia UNA VEZ POR LLAMADA.
+It comes from XThread::SetActiveCpu, which the game calls every time it
+creates a thread or changes its CPU, and the SDK was writing it out ONCE PER
+CALL.
 
-Y no es solo ruido molesto. Cada linea es un formateo, un cerrojo y una
-escritura a disco, hecha desde un hilo del juego. En un equipo de dos nucleos
--que es exactamente el unico caso en el que esa rama se ejecuta- eso le roba
-la CPU a todo lo demas. El sintoma que lo destapo: el audio se cortaba a los
-segundos de salir del taller y el juego se volvia un barrizal.
+And it's not just annoying noise. Every line is a format, a lock, and a
+disk write, done from a game thread. On a dual-core machine -which is
+exactly the only case where that branch runs- that steals CPU time from
+everything else. The symptom that exposed it: audio would cut out seconds
+after leaving the garage and the game would turn into a mess.
 
-O sea que el aviso que decia "aqui la planificacion va a ir mal" era, el
-mismo, una parte importante de por que iba mal.
+So the warning that said "scheduling is about to go wrong here" was, itself,
+a significant part of why it went wrong.
 
-Ahora sale una sola vez por ejecucion. El texto original se conserva entero
-por si algo lo busca.
+Now it's printed only once per run. The original text is kept in full in
+case anything else looks for it.
 """
 
 import argparse
@@ -112,9 +116,10 @@ import sys
 
 MARCA = "PARCHE LOCAL - diagnostico y ruido v3"
 
-# Marcas de versiones anteriores. Si aparece alguna, se revierte antes de
-# aplicar la nueva: reaplicar encima no encontraria los anclajes -ya estan
-# reescritos- y el script se pararia diciendo que el SDK ha cambiado.
+# Marks of earlier versions. If any of these show up, it's reverted before
+# applying the new one: reapplying on top would never find the anchors
+# -they're already rewritten- and the script would stop, claiming the SDK
+# had changed.
 MARCAS_VIEJAS = [
     "PARCHE LOCAL - diagnostico del hilo que revienta v2",
     "PARCHE LOCAL - diagnostico del hilo que revienta",
@@ -346,9 +351,10 @@ def main():
                 print(f"[aviso] No hay .original de {f.name}.")
         return 0
 
-    # Si esta puesta una version anterior, se quita primero. Reaplicar encima
-    # nunca encontraria los anclajes -ya estan reescritos- y el script se
-    # pararia diciendo que el SDK ha cambiado, que es un mensaje enganoso.
+    # If an earlier version is in place, it's removed first. Reapplying on
+    # top would never find the anchors -they're already rewritten- and the
+    # script would stop, claiming the SDK had changed, which is a
+    # misleading message.
     for f, _ in trabajos:
         t = f.read_text(encoding="utf-8")
         if MARCA not in t and any(m in t for m in MARCAS_VIEJAS):
@@ -360,9 +366,9 @@ def main():
             shutil.copy2(original, f)
             print(f"[ok] Quitada la version anterior de {f.name}")
 
-    # Comprobar TODOS los anclajes de TODOS los ficheros antes de escribir
-    # nada. Si el SDK cambia de version y alguno no cuadra, es mucho peor
-    # dejar un fichero parcheado y otro no que no parchear ninguno.
+    # Check ALL the anchors in ALL the files before writing anything. If the
+    # SDK changes version and one of them doesn't match, it's much worse to
+    # leave one file patched and another not than to patch none at all.
     planes = []
     for f, anclas in trabajos:
         txt = f.read_text(encoding="utf-8")

@@ -1,100 +1,105 @@
 #!/usr/bin/env python3
 """
-Desatasca la voz XMA cuando el juego se queda girando sobre ella.
+Unsticks the XMA voice when the game gets stuck spinning on it.
 
-    python tools/parche_desatasco.py            aplicar
+    python tools/parche_desatasco.py            apply
     python tools/parche_desatasco.py --estado
     python tools/parche_desatasco.py --revertir
 
-Toca un fichero del SDK:  src/kernel/xboxkrnl/xboxkrnl_audio_xma.cpp
-Va DESPUES de tools/parche_anillo.py, sobre ese mismo fichero.
+Touches one SDK file:  src/kernel/xboxkrnl/xboxkrnl_audio_xma.cpp
+Runs AFTER tools/parche_anillo.py, on that same file.
 
-AVISO POR DELANTE: esto es un APANO, no la cura. Rompe el atasco desde fuera
-en vez de evitar que ocurra. Lo digo aqui para que quede escrito.
+WARNING UP FRONT: this is a WORKAROUND, not the cure. It breaks the stall
+from the outside instead of preventing it from happening. Saying this here
+so it's on record.
 
 
-LO QUE YA ESTA MEDIDO, SIN HUECOS
-=================================
+WHAT'S ALREADY BEEN MEASURED, WITH NO GAPS
+============================================
 
-Todo el audio del juego lo lleva UN SOLO hilo, el 0xD. El mismo alimenta al
-descodificador, consume lo descodificado y mezcla. Esto es el final, con el
-detalle al milisegundo:
+All of the game's audio runs on a SINGLE thread, 0xD. That same thread feeds
+the decoder, consumes what's decoded, and mixes. Here's the end, down to the
+millisecond:
 
-  01.528  el juego le da entrada a la voz 19
-  01.679  entra en el bucle de mezcla (sub_825E1CD0) para esa voz
-  01.679  Work produce, escritura 0 -> 4
-  01.700  Work produce, escritura 4 -> 8
-  01.709  Work produce, escritura 8 -> 12
-  01.728  Work NO PRODUCE NADA.  ent0=0 ent1=0.  Se acabo la entrada.
+  01.528  the game feeds input to voice 19
+  01.679  enters the mixing loop (sub_825E1CD0) for that voice
+  01.679  Work produces, write 0 -> 4
+  01.700  Work produces, write 4 -> 8
+  01.709  Work produces, write 8 -> 12
+  01.728  Work PRODUCES NOTHING.  ent0=0 ent1=0.  Input is gone.
   01.739  ...
-  01.782  ...  y el juego, mientras, mueve su lectura 16, 20, 0, 4, 8: una
-               vuelta entera al anillo consumiendo lo que ya nadie rellena.
-               Al volver a 8 se para.
-  02.119  a partir de aqui, 90 segundos leyendo los dos offsets y nada mas.
+  01.782  ...  meanwhile the game keeps moving its read pointer through 16,
+               20, 0, 4, 8: a full lap of the ring consuming what nobody
+               refills anymore. It stops once it gets back to 8.
+  02.119  from here on, 90 seconds of reading the two offsets and nothing
+          else.
 
-Y en ese mismo tramo el juego SI le da entrada a las voces vecinas -6500 y
-6540- a las 01.549, 01.608, 01.658, 01.698, 01.759 y 01.779. A la voz 19 no le
-da ninguna. No es que se le olvide: para llegar a alimentarla tendria que
-salir del bucle de mezcla, y de ahi ya no sale.
-
-
-POR QUE NO SALE
-===============
-
-El bucle, leido instruccion a instruccion:
-
-  - si una voz esta mal servida, pone una bandera y NO pasa a la siguiente:
-    repite esa misma voz sin parar
-  - para saber cuanto audio hay, resta:  escritura*256 - su cursor
-  - si esa resta da CERO, y solo entonces, pregunta si el buffer de salida
-    sigue valido. Si le dicen que no, lo entiende como "buffer completo" y se
-    lleva los 6144 bytes de golpe. Esa es su salida de emergencia.
-
-En el atasco la resta da unos 1000, no cero: la lectura del juego se queda a
-UN BLOQUE de alcanzar a la escritura. Asi que nunca llega a preguntar, y su
-salida de emergencia no se dispara. Espera audio que solo podria producir un
-descodificador que no tiene con que, alimentado por el mismo hilo que espera.
+And in that same window the game DOES feed the neighboring voices -6500 and
+6540- at 01.549, 01.608, 01.658, 01.698, 01.759, and 01.779. It feeds voice
+19 nothing at all. It's not that it forgets: to reach the point of feeding
+it, it would have to exit the mixing loop, and from there it never exits.
 
 
-QUE HACE ESTE PARCHE
+WHY IT DOESN'T EXIT
 ====================
 
-Vigila esa situacion exacta, en la propia funcion que el juego consulta en
-bucle. Cuando lleva mas de 250 ms cumpliendose TODO esto a la vez:
+The loop, read instruction by instruction:
 
-  - el juego pide el offset de escritura del mismo contexto una y otra vez
-  - ese contexto tiene la salida marcada como valida
-  - sus dos buffers de entrada estan vacios, o sea que el descodificador no
-    tiene absolutamente nada que producir
-  - y escritura y lectura no coinciden, que es lo que impide que el juego
-    llegue a hacer su pregunta
+  - if a voice is poorly served, it sets a flag and does NOT move on to the
+    next one: it repeats that same voice endlessly
+  - to know how much audio there is, it subtracts:  write*256 - its cursor
+  - if that subtraction comes out to ZERO, and only then, it asks whether
+    the output buffer is still valid. If told no, it interprets that as
+    "buffer complete" and takes all 6144 bytes at once. That's its
+    emergency exit.
 
-entonces le da la senal que su propio codigo sabe interpretar: iguala la
-escritura a la lectura y apaga output_buffer_valid. Es decir, "este buffer
-esta terminado". El juego hace su resta, le da cero o negativo, pregunta, se
-entera, se lleva lo que queda y sigue.
-
-Los 250 ms son de sobra: en marcha normal esas consultas se resuelven en
-microsegundos. La condicion no se cumple jugando bien.
-
-El precio es un tropiezo de audio en esa voz, porque parte de lo que se lleva
-es material viejo del anillo. A cambio de no colgarse.
+During the stall the subtraction comes out to around 1000, not zero: the
+game's read pointer stays ONE BLOCK short of catching up to the write
+pointer. So it never gets to ask, and its emergency exit never fires. It
+waits for audio that only a decoder could produce, and that decoder has
+nothing to work with, fed by the very same thread that's waiting.
 
 
-POR QUE ES UN APANO Y NO LA CURA
-================================
+WHAT THIS PATCH DOES
+======================
 
-La cura seria que el descodificador no se quedara nunca seco a media mezcla, y
-eso pasa por entender por que el juego llega tan justo de entrada. Sospecho
-del ritmo: en esta maquina, a 18 fps y con el log a tope, el hilo de audio
-llega tarde a rellenar. Pero sospechar no es saberlo, y no lo voy a vender
-como que lo se.
+It watches for that exact situation, inside the very function the game
+polls in a loop. When ALL of the following have held true at once for more
+than 250 ms:
 
-Lo que si se puede decir es que ataca una situacion IMPOSIBLE de alcanzar
-jugando bien -un hilo girando un cuarto de segundo sobre una voz sin entrada-
-y que si se dispara deja un aviso en el log. Si aparece a menudo, el problema
-de ritmo es gordo y hay que ir a por el. Si no aparece nunca y el juego deja
-de colgarse, era esto.
+  - the game asks for the write offset of the same context over and over
+  - that context has its output marked as valid
+  - both of its input buffers are empty, meaning the decoder has absolutely
+    nothing to produce
+  - and write and read don't match, which is what keeps the game from ever
+    reaching its own check
+
+then it gives the signal that the game's own code knows how to interpret:
+it sets write equal to read and turns off output_buffer_valid. In other
+words, "this buffer is done". The game does its subtraction, gets zero or
+negative, asks, finds out, takes what's left, and continues.
+
+The 250 ms is plenty of margin: under normal play those checks resolve in
+microseconds. The condition never triggers during normal play.
+
+The cost is a stutter of audio on that voice, because part of what gets
+taken is stale material from the ring. In exchange for not hanging.
+
+
+WHY IT'S A WORKAROUND AND NOT THE CURE
+=========================================
+
+The cure would be for the decoder to never run dry mid-mix, and that means
+understanding why the game arrives so tight on input. I suspect it's a
+timing issue: on this machine, at 18 fps with logging maxed out, the audio
+thread arrives late to refill. But suspecting isn't knowing, and I'm not
+going to pass it off as if I knew.
+
+What can be said is that it targets a situation that's IMPOSSIBLE to reach
+during normal play -a thread spinning for a quarter of a second on a voice
+with no input- and that if it fires, it leaves a warning in the log. If it
+shows up often, the timing problem is serious and needs to be tackled head
+on. If it never shows up and the game stops hanging, this was it.
 """
 
 import argparse
@@ -192,9 +197,9 @@ def main():
         return 0
 
     if args.revertir:
-        # La copia de seguridad de este fichero la hace parche_anillo.py, que es
-        # quien lo toca primero. Restaurarla aqui se llevaria por delante su
-        # instrumentacion, asi que se manda al que corresponde.
+        # The backup of this file is made by parche_anillo.py, which is the
+        # one that touches it first. Restoring it here would wipe out its
+        # instrumentation, so it's handed off to the one responsible for it.
         print("  Este parche va encima de parche_anillo.py y comparte con el la")
         print("  copia de seguridad, asi que se deshace desde alli:")
         print(r"    py -3 tools\parche_anillo.py --revertir")
@@ -208,10 +213,11 @@ def main():
         print(f"[ok] {f.name}: el desatasco ya estaba puesto")
         return 0
 
-    # Este parche usa std::atomic y std::chrono, y quien mete esas dos
-    # cabeceras en el fichero es parche_anillo.py. Sin el, esto compilaria mal
-    # y el error saldria a mitad de la build del SDK, que es el peor sitio
-    # posible para enterarse. Mejor pararlo aqui.
+    # This patch uses std::atomic and std::chrono, and the one that puts
+    # those two headers in the file is parche_anillo.py. Without it, this
+    # would fail to compile and the error would show up halfway through the
+    # SDK build, which is the worst possible place to find out. Better to
+    # stop it here.
     if "PARCHE LOCAL - escucha de la conversacion XMA" not in txt:
         sys.exit("[ERROR] Falta parche_anillo.py, que es quien pone las cabeceras\n"
                  "        que este necesita. Ejecutalo antes:\n"
