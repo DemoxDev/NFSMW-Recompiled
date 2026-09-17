@@ -9,15 +9,15 @@
 #include <rex/logging.h>
 #include <rex/rex_app.h>
 #include <rex/ui/overlay/debug_overlay.h>
-#include <rex/ui/presenter.h>  // CONTADOR DE FPS - fotogramas del juego
-#include <rex/system/kernel_state.h>  // VIGILANTE DE CUELGUES
-#include <rex/system/xthread.h>       // VIGILANTE DE CUELGUES
+#include <rex/ui/presenter.h>  // FPS COUNTER - game frames
+#include <rex/system/kernel_state.h>  // HANG WATCHDOG
+#include <rex/system/xthread.h>       // HANG WATCHDOG
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
-#include <map>  // VIGILANTE DE CUELGUES - la firma se ordena por id de hilo
+#include <map>  // HANG WATCHDOG - the signature is ordered by thread id
 #include <cstdlib>
 #include <memory>
 #include <string>
@@ -34,45 +34,45 @@ class NfsmwApp : public rex::ReXApp {
         PPCImageConfig));
   }
 
-  // Ganchos disponibles y sin usar:
+  // Available hooks that are unused:
   //   void OnPreSetup(rex::RuntimeConfig& config) override {}
   //   void OnLoadXexImage(std::string& xex_image) override {}
   //   void OnPostLoadXexImage() override {}
   //   void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {}
   //   void OnShutdown() override {}
   //
-  // Los tres de abajo SI estan usados: rutas portables, ajustes obligatorios
-  // y contador de fps.
+  // The three below ARE used: portable paths, mandatory settings,
+  // and the fps counter.
 
  protected:
   // ==========================================================================
-  //  1. RUTAS PORTABLES: encontrar la ISO al lado del .exe
+  //  1. PORTABLE PATHS: find the ISO next to the .exe
   //
-  //  Sin esto, arrancar sin --game_data_root muere con
+  //  Without this, starting without --game_data_root dies with
   //      "--game_data_root was not provided."
-  //  porque SetupEnvironment solo mira el cvar y, si esta vacio,
-  //  ConstructRuntime aborta.
+  //  because SetupEnvironment only looks at the cvar and, if it's empty,
+  //  ConstructRuntime aborts.
   //
-  //  OnConfigurePaths se llama justo despues de construir el PathConfig y
-  //  antes de que nadie lo use, asi que es el sitio para rellenar el hueco.
+  //  OnConfigurePaths is called right after building the PathConfig and
+  //  before anyone uses it, so it's the place to fill the gap.
   //
-  //  ORDEN, QUE IMPORTA: esto corre ANTES de que se cargue nfsmw.toml -el SDK
-  //  lo lee unas lineas mas abajo, en SetupEnvironment-. Asi que la prioridad
-  //  real es: --game_data_root de la linea de comandos, y si no, lo que se
-  //  encuentre aqui al lado. Poner game_data_root en el toml NO funciona, y
-  //  no es cosa nuestra: es como esta ordenado el SDK.
+  //  ORDER MATTERS: this runs BEFORE nfsmw.toml is loaded -the SDK reads it
+  //  a few lines below, in SetupEnvironment-. So the real priority is:
+  //  --game_data_root from the command line, and if not, whatever is found
+  //  here alongside it. Putting game_data_root in the toml does NOT work,
+  //  and that's not our doing: it's how the SDK is ordered.
   //
-  //  Se busca, en este orden:
-  //    1. un .iso cuyo nombre coincida con el del ejecutable
-  //    2. cualquier otro .iso de la carpeta, por orden alfabetico
-  //    3. una carpeta game_root\, por si alguien prefiere extraerla
+  //  Searched for, in this order:
+  //    1. an .iso whose name matches the executable's
+  //    2. any other .iso in the folder, alphabetically
+  //    3. a game_root\ folder, in case someone prefers to extract it
   //
-  //  El (1) existe para que una carpeta con NFS_Most_Wanted.exe y
-  //  NFS_Most_Wanted.iso funcione sin ambiguedad aunque haya mas imagenes.
+  //  (1) exists so that a folder with NFS_Most_Wanted.exe and
+  //  NFS_Most_Wanted.iso works unambiguously even if there are more images.
   // ==========================================================================
   void OnConfigurePaths(rex::PathConfig& paths) override {
     if (!paths.game_data_root.empty()) {
-      return;  // el usuario lo dijo por linea de comandos; manda el.
+      return;  // the user specified it on the command line; they take precedence.
     }
 
     std::error_code ec;
@@ -81,7 +81,7 @@ class NfsmwApp : public rex::ReXApp {
       return;
     }
 
-    // El nombre del ejecutable, para el caso preferente.
+    // The executable's name, for the preferred case.
     std::filesystem::path preferida;
     std::vector<std::filesystem::path> otras;
 
@@ -121,61 +121,62 @@ class NfsmwApp : public rex::ReXApp {
       std::sort(otras.begin(), otras.end());
       paths.game_data_root = otras.front();
     } else {
-      // Sin ISO: una carpeta extraida al lado tambien vale. El parche de la
-      // ISO dejo --game_data_root aceptando las dos cosas.
+      // No ISO: an extracted folder alongside also works. The ISO patch
+      // left --game_data_root accepting both.
       const auto extraida = carpeta / "game_root";
       if (std::filesystem::is_directory(extraida, ec)) {
         paths.game_data_root = extraida;
       }
     }
-    // Si no se encuentra nada, se deja vacio a proposito: el SDK dara su
-    // propio mensaje, que es mas claro que cualquiera que pusieramos aqui.
+    // If nothing is found, it's left empty on purpose: the SDK will give its
+    // own message, which is clearer than anything we'd put here.
   }
 
   // ==========================================================================
-  //  2. AJUSTES OBLIGATORIOS
+  //  2. MANDATORY SETTINGS
   //
-  //  Para que "NFS_Most_Wanted.exe" a secas, sin un solo argumento, arranque
-  //  igual de bien que con la linea de comandos larga de siempre.
+  //  So that "NFS_Most_Wanted.exe" alone, without a single argument, starts
+  //  up just as well as with the usual long command line.
   //
-  //  Solo se tocan los que el usuario NO haya puesto: HasNonDefaultValue
-  //  distingue "esto viene de fabrica" de "esto lo pidio alguien". Asi la
-  //  linea de comandos y nfsmw.toml siguen mandando.
+  //  Only the ones the user has NOT set are touched: HasNonDefaultValue
+  //  distinguishes "this comes from the factory" from "someone requested
+  //  this". This way the command line and nfsmw.toml still take precedence.
   //
-  //  POR QUE EN DOS SITIOS DISTINTOS
-  //  El cvar readback_resolve no existe todavia cuando arranca el logging: lo
-  //  registra el plugin de GPU (rexgpu-xenos.dll), que se carga despues, en
-  //  SetupPresentation. Ponerlo antes seria escribir sobre un flag que aun no
-  //  existe. Por eso:
+  //  WHY IN TWO DIFFERENT PLACES
+  //  The readback_resolve cvar doesn't exist yet when logging starts up: it's
+  //  registered by the GPU plugin (rexgpu-xenos.dll), which loads later, in
+  //  SetupPresentation. Setting it earlier would mean writing to a flag that
+  //  doesn't exist yet. Hence:
   //
-  //    OnPostInitLogging  -> gpu_plugin y mnk_mode, que son del runtime y ya
-  //                          estan registrados. Y tiene que ser AQUI, porque
-  //                          SetupPresentation lee gpu_plugin justo despues.
-  //    OnPostSetup        -> readback_resolve, cuando el plugin ya cargo y
-  //                          todavia no se ha dibujado ni un fotograma.
+  //    OnPostInitLogging  -> gpu_plugin and mnk_mode, which belong to the
+  //                          runtime and are already registered. And it has
+  //                          to be HERE, because SetupPresentation reads
+  //                          gpu_plugin right after.
+  //    OnPostSetup        -> readback_resolve, once the plugin has loaded
+  //                          and not a single frame has been drawn yet.
   // ==========================================================================
   void OnPostInitLogging() override {
-    // Sin plugin de GPU la pantalla se queda negra: el juego corre, pero el
-    // runtime descarta sus llamadas graficas con "no GPU emulation loaded".
+    // Without a GPU plugin the screen stays black: the game runs, but the
+    // runtime discards its graphics calls with "no GPU emulation loaded".
     PonerSiNadieLoPidio("gpu_plugin", "xenos");
-    // Teclado y raton ademas del mando.
+    // Keyboard and mouse in addition to the controller.
     PonerSiNadieLoPidio("mnk_mode", "true");
   }
 
   void OnPostSetup() override {
-    // NO ES UNA PREFERENCIA, ES UN ARREGLO. El juego calcula su exposicion
-    // midiendo el brillo medio de la escena y leyendo ese valor de vuelta en
-    // la CPU. Esa lectura viene desactivada de fabrica ("none"), asi que el
-    // juego recibe basura, deduce que la escena esta oscurisima y sube la
-    // exposicion al maximo: imagen lavada y sol reventado.
+    // THIS IS NOT A PREFERENCE, IT'S A FIX. The game computes its exposure
+    // by measuring the scene's average brightness and reading that value
+    // back on the CPU. That readback is disabled by default ("none"), so
+    // the game receives garbage, concludes the scene is pitch black, and
+    // cranks exposure to the max: washed-out image and blown-out sun.
     PonerSiNadieLoPidio("readback_resolve", "fast");
 
-    // Contador de fps del overlay de F3, ver mas abajo. Devuelve lo ultimo
-    // que midio el vigilante; no mide aqui, para que abrir el overlay no
-    // cambie el numero que se esta leyendo.
+    // Fps counter for the F3 overlay, see below. Returns whatever the
+    // watchdog last measured; it doesn't measure here, so opening the
+    // overlay doesn't change the number being read.
     SetGuestFrameStats([this] { return stats_; });
 
-    // Vigilante de cuelgues, ver mas abajo.
+    // Hang watchdog, see below.
     ArrancarVigilante();
   }
 
@@ -188,7 +189,7 @@ class NfsmwApp : public rex::ReXApp {
       return;
     }
     if (rex::cvar::HasNonDefaultValue(nombre)) {
-      return;  // lo puso el usuario: no se le lleva la contraria.
+      return;  // the user set it: don't second-guess them.
     }
     if (rex::cvar::SetFlagByName(nombre, valor)) {
       REXLOG_DEBUG("Ajuste por defecto de la build portable: {} = {}", nombre, valor);
@@ -196,39 +197,39 @@ class NfsmwApp : public rex::ReXApp {
   }
 
   // ==========================================================================
-  //  3. CONTADOR DE FPS PARA EL OVERLAY DE F3
+  //  3. FPS COUNTER FOR THE F3 OVERLAY
   //
-  //  En una build RELEASE, F3 abre una caja vacia que solo pone "Debug". Son
-  //  dos cosas distintas y las dos estaban cerradas:
+  //  In a RELEASE build, F3 opens an empty box that just says "Debug". These
+  //  are two separate things and both were closed off:
   //
-  //    1. Casi todo el panel vive dentro de #ifdef REXGLUE_ENABLE_PERF_COUNTERS,
-  //       y el CMakeLists del SDK dice
+  //    1. Almost the entire panel lives inside #ifdef REXGLUE_ENABLE_PERF_COUNTERS,
+  //       and the SDK's CMakeLists says
   //         add_compile_definitions($<$<NOT:$<CONFIG:Release>>:REXGLUE_ENABLE_PERF_COUNTERS>)
-  //       o sea que en Release el define no se aplica. Es a proposito:
-  //       "compiled out in Release", dice su comentario.
+  //       meaning the define doesn't apply in Release. That's intentional:
+  //       "compiled out in Release", its comment says.
   //
-  //    2. La linea "Guest: X FPS" NO esta dentro de ese #ifdef. Solo pide que
-  //       alguien registre un proveedor con SetGuestFrameStats, y en el SDK no
-  //       lo llama nadie: es una API que la app tiene que usar.
+  //    2. The "Guest: X FPS" line is NOT inside that #ifdef. It only requires
+  //       someone to register a provider with SetGuestFrameStats, and nothing
+  //       in the SDK calls it: it's an API the app has to use.
   //
-  //  El (2) es la puerta que si se puede abrir sin tocar el SDK.
+  //  (2) is the door that CAN be opened without touching the SDK.
   //
-  //  DE DONDE SALE EL NUMERO, Y POR QUE NO DE UN RELOJ DE AQUI.
-  //  La primera version miraba el reloj cada vez que alguien preguntaba y daba
-  //  el hueco entre dos preguntas por bueno como si fuera un fotograma. Con el
-  //  overlay cerrado -toda corrida automatica- el unico que preguntaba era el
-  //  vigilante, una vez por segundo: dt salia ~1000 ms, el filtro lo tiraba, y
-  //  el log escribia 0.0 fps para siempre. No era lentitud, era el medidor.
+  //  WHERE THE NUMBER COMES FROM, AND WHY NOT FROM A CLOCK HERE.
+  //  The first version checked the clock every time something asked and took
+  //  the gap between two asks as if it were one frame. With the overlay
+  //  closed -every automated run- the only one asking was the watchdog, once
+  //  a second: dt came out to ~1000 ms, the filter threw it out, and the log
+  //  wrote 0.0 fps forever. It wasn't slowness, it was the meter.
   //
-  //  El intento siguiente -un dialogo de ImGui contando en su OnDraw- si daba
-  //  un numero, pero el EQUIVOCADO: contaba repintados de la INTERFAZ, que van
-  //  por libre y llegan a 1770 por segundo mientras el juego da 17-30.
+  //  The next attempt -an ImGui dialog counting in its OnDraw- did give a
+  //  number, but the WRONG one: it counted UI repaints, which run free and
+  //  reach 1770 per second while the game does 17-30.
   //
-  //  Un fotograma del juego solo existe en un sitio: cuando el presentador
-  //  acepta una imagen nueva del guest. Eso es lo que cuenta el contador del
-  //  SDK -PARCHE LOCAL en ui/presenter.h- y lo que se lee aqui. Se calcula por
-  //  diferencia sobre el tic de un segundo del vigilante, asi que no hace
-  //  falta ningun gancho por fotograma ni media movil: el intervalo es real.
+  //  A game frame only exists in one place: when the presenter accepts a new
+  //  image from the guest. That's what the SDK's counter -LOCAL PATCH in
+  //  ui/presenter.h- counts, and what's read here. It's computed as a diff
+  //  over the watchdog's one-second tick, so no per-frame hook or moving
+  //  average is needed: the interval is real.
   // ==========================================================================
   rex::ui::FrameStats MideFotogramas(double dt_s) {
     const auto* presentador =
@@ -242,53 +243,56 @@ class NfsmwApp : public rex::ReXApp {
 
     stats_.fps = double(nuevos) / dt_s;
     stats_.frame_time_ms = stats_.fps > 0.0 ? 1000.0 / stats_.fps : 0.0;
-    stats_.frame_count = ahora;  // el overlay no dibuja si esto es 0
+    stats_.frame_count = ahora;  // the overlay doesn't draw if this is 0
     return stats_;
   }
 
   // ==========================================================================
-  //  4. VIGILANTE DE CUELGUES
+  //  4. HANG WATCHDOG
   //
-  //  EL PROBLEMA QUE RESUELVE
-  //  Al volver al menu el juego se queda congelado, y en el log no aparece
-  //  absolutamente nada: ni un error, ni una llamada al kernel, ni un comando
-  //  grafico. Silencio total hasta que uno cierra la ventana. Eso descarta una
-  //  excepcion o una funcion sin registrar -esas se ven- y deja una sola
-  //  explicacion: TODOS los hilos del juego estan parados a la vez, esperando
-  //  algo que no llega.
+  //  THE PROBLEM IT SOLVES
+  //  On returning to the menu the game freezes, and absolutely nothing
+  //  appears in the log: no error, no kernel call, no graphics command.
+  //  Total silence until you close the window. That rules out an exception
+  //  or an unregistered function -those are visible- and leaves only one
+  //  explanation: ALL of the game's threads are stopped at once, waiting for
+  //  something that never arrives.
   //
-  //  Y de un interbloqueo no se sale mirando el log, porque justamente lo que
-  //  lo define es que ya no se escribe nada. Hay que ir a preguntarle a los
-  //  hilos.
+  //  And you can't get out of a deadlock by looking at the log, because the
+  //  very thing that defines it is that nothing gets written anymore. You
+  //  have to go ask the threads directly.
   //
-  //  COMO FUNCIONA, Y POR QUE NO NECESITA QUE NADIE LE AVISE
-  //  Un hilo aparte mira una vez por segundo TODOS los hilos del guest y anota
-  //  dos registros de cada uno:
+  //  HOW IT WORKS, AND WHY IT NEEDS NO COOPERATION FROM ANYONE
+  //  A separate thread checks ALL of the guest's threads once a second and
+  //  records two registers from each:
   //
-  //    lr  a donde volveria la funcion en la que esta. Cambia constantemente
-  //        en codigo que avanza.
-  //    r1  el puntero de pila. Igual.
+  //    lr  where the function it's in would return to. Changes constantly
+  //        in code that's progressing.
+  //    r1  the stack pointer. Same idea.
   //
-  //  Si en varios segundos seguidos NINGUN hilo ha movido ninguno de los dos,
-  //  el juego no esta lento: esta parado. Entonces se vuelca la tabla.
+  //  If for several seconds in a row NO thread has moved either one, the
+  //  game isn't slow: it's stopped. Then the table gets dumped.
   //
-  //  Lo bueno de medirlo asi es que no depende de nada: ni del contador de
-  //  fotogramas -que solo corre con el overlay abierto-, ni de que el juego
-  //  llame al kernel, ni de que el hilo grafico siga vivo. Si todo se para, se
-  //  nota justo porque todo se para.
+  //  The nice thing about measuring it this way is that it depends on
+  //  nothing else: not the frame counter -which only runs with the overlay
+  //  open-, not the game calling the kernel, not the graphics thread staying
+  //  alive. If everything stops, it shows up precisely because everything
+  //  stops.
   //
-  //  QUE SE SACA DEL VOLCADO
-  //  Por cada hilo: su direccion de entrada -que dice QUE hilo es-, lr, r1 y
-  //  r13. Con eso se distingue el que espera -lr clavado en una funcion de
-  //  espera del kernel- del que da vueltas -lr saltando entre dos o tres
-  //  direcciones-. Y como se vuelca cada 15 segundos mientras dure, se ve si
-  //  algo se mueve muy despacio o no se mueve en absoluto.
+  //  WHAT THE DUMP GIVES YOU
+  //  For each thread: its entry address -which says WHICH thread it is-, lr,
+  //  r1, and r13. That distinguishes the one that's waiting -lr stuck in a
+  //  kernel wait function- from the one that's spinning -lr bouncing between
+  //  two or three addresses-. And since it dumps every 15 seconds for as
+  //  long as it lasts, you can see if something is moving very slowly or not
+  //  moving at all.
   //
-  //  COSTE CUANDO NO PASA NADA
-  //  Una pasada por segundo leyendo dos enteros por hilo. Nada.
+  //  COST WHEN NOTHING IS HAPPENING
+  //  One pass per second reading two integers per thread. Nothing.
   //
-  //  Vive en la app y no en el SDK a proposito: asi se toca sin recompilar el
-  //  SDK entero, y no le impone a nadie mas un hilo de vigilancia.
+  //  It lives in the app and not the SDK on purpose: that way it can be
+  //  changed without recompiling the whole SDK, and it doesn't force a
+  //  watchdog thread on anyone else.
   // ==========================================================================
 
   void ArrancarVigilante() {
@@ -303,8 +307,8 @@ class NfsmwApp : public rex::ReXApp {
     }
   }
 
-  // Volcado de la tabla de hilos. 'grave' decide si sale como error -cuando
-  // es una alarma de verdad- o como debug -las instantaneas de rutina-.
+  // Dump of the thread table. 'grave' decides whether it comes out as error
+  // -when it's a real alarm- or as debug -routine snapshots-.
   template <typename Lista>
   static void VolcarHilos(const Lista& hilos, bool grave) {
     for (auto& h : hilos) {
@@ -335,31 +339,34 @@ class NfsmwApp : public rex::ReXApp {
   }
 
   // ==========================================================================
-  //  PERFILADOR DE CODIGO DEL JUEGO
+  //  GAME CODE PROFILER
   //
-  //  EL PROBLEMA. El juego va a 15 fps -66 ms por fotograma- con el hilo
-  //  principal al 90% de un nucleo y quince nucleos sin hacer nada. O sea que
-  //  el limite es un solo hilo ejecutando codigo del juego. Falta saber QUE
-  //  codigo, y ninguna herramienta de fuera lo dice: perf no esta instalado,
-  //  ptrace_scope=1 impide que un perfilador hermano se enganche, y Tracy pide
-  //  recompilar los 272 ficheros del recompilado y un visor aparte.
+  //  THE PROBLEM. The game runs at 15 fps -66 ms per frame- with the main
+  //  thread at 90% of one core and fifteen cores doing nothing. Meaning the
+  //  bottleneck is a single thread executing game code. What's missing is
+  //  WHICH code, and no external tool can tell you: perf isn't installed,
+  //  ptrace_scope=1 stops a sibling profiler from attaching, and Tracy
+  //  requires recompiling all 272 files of the recompilation plus a separate
+  //  viewer.
   //
-  //  COMO SE MIDE SIN NADA DE ESO. El codigo generado escribe ctx.lr = <sitio
-  //  al que se vuelve> justo antes de CADA llamada. Asi que lr, leido a menudo,
-  //  es un contador de programa a escala de llamada: dice por que sitio del
-  //  juego va el hilo. Y el contexto de cada hilo ya es accesible desde aqui;
-  //  el vigilante de abajo lleva leyendolo desde el principio.
+  //  HOW IT'S MEASURED WITHOUT ANY OF THAT. The generated code writes
+  //  ctx.lr = <return site> right before EVERY call. So lr, read frequently,
+  //  is a call-granularity program counter: it tells you where in the game
+  //  the thread is. And each thread's context is already accessible from
+  //  here; the watchdog below has been reading it from the start.
   //
-  //  Mil muestras por segundo cuestan leer un entero mil veces: nada medible.
+  //  A thousand samples per second cost reading one integer a thousand
+  //  times: nothing measurable.
   //
-  //  LO QUE NO ES. Las direcciones salen a resolucion de sitio-de-llamada, no
-  //  de instruccion, y leer lr mientras el otro hilo corre es una carrera
-  //  benigna -lectura alineada de 8 bytes en x86-64-. Para decidir DONDE mirar
-  //  sobra; para microoptimizar una funcion concreta, no.
+  //  WHAT IT ISN'T. The addresses come out at call-site resolution, not
+  //  instruction resolution, and reading lr while the other thread runs is
+  //  a benign race -aligned 8-byte read on x86-64-. That's plenty for
+  //  deciding WHERE to look; not enough for micro-optimizing one specific
+  //  function.
   //
-  //  COMO SE LEE EL VOLCADO. Cada direccion se busca tal cual en
-  //  generated/default/: aparece como "// bl 0x8...." en el sitio de llamada,
-  //  dentro de la funcion sub_XXXXXXXX que se la esta comiendo.
+  //  HOW TO READ THE DUMP. Each address is looked up as-is in
+  //  generated/default/: it shows up as "// bl 0x8...." at the call site,
+  //  inside the sub_XXXXXXXX function that's eating the time.
   // ==========================================================================
   void MuestreaLr() {
     auto* kernel = rex::system::kernel_state();
@@ -381,9 +388,9 @@ class NfsmwApp : public rex::ReXApp {
     ++muestras_;
     ++perfil_[lr];
 
-    // PERFIL_TODOS=1: muestrea TODOS los hilos del juego, no solo el
-    // principal. Hace falta cuando el que trabaja no es el principal -en las
-    // peliculas el principal esta bloqueado y quien decodifica es otro hilo-.
+    // PERFIL_TODOS=1: samples ALL of the game's threads, not just the main
+    // one. Needed when the one doing the work isn't the main thread -during
+    // cutscenes the main thread is blocked and another thread decodes-.
     if (todos_los_hilos_) {
       for (auto& h : kernel->object_table()->GetObjectsByType<rex::system::XThread>()) {
         auto* e2 = h->thread_state();
@@ -391,9 +398,10 @@ class NfsmwApp : public rex::ReXApp {
         const auto& c2 = *e2->context();
         const uint64_t huella = uint64_t(uint32_t(c2.lr)) | (uint64_t(c2.r1.u32) << 32);
         auto& anterior = huella_por_hilo_[h->thread_id()];
-        // Solo cuenta si el hilo SE HA MOVIDO desde la muestra anterior. Sin
-        // este filtro el histograma lo copan los hilos dormidos en su funcion
-        // de espera, que son mayoria y no consumen nada.
+        // Only counts if the thread HAS MOVED since the previous sample.
+        // Without this filter the histogram gets dominated by threads
+        // asleep in their wait function, which are the majority and use
+        // nothing.
         if (anterior != huella) {
           anterior = huella;
           ++perfil_otros_[static_cast<uint32_t>(c2.lr)];
@@ -402,11 +410,11 @@ class NfsmwApp : public rex::ReXApp {
       }
     }
 
-    // ATASCADO O TRABAJANDO: la pregunta que decide todo. Una funcion de
-    // cuarenta instrucciones sin bucles no puede comerse 45 ms por fotograma
-    // ejecutando; o la llaman millones de veces, o el hilo esta PARADO ahi.
-    // Si lr Y el puntero de pila repiten valor de una muestra a la siguiente,
-    // es que no se ha movido: esta esperando, no calculando.
+    // STUCK OR WORKING: the question that decides everything. A forty
+    // instruction function with no loops can't eat 45 ms per frame just by
+    // executing; either it's called millions of times, or the thread is
+    // STUCK there. If lr AND the stack pointer repeat their value from one
+    // sample to the next, it hasn't moved: it's waiting, not computing.
     if (lr == lr_anterior_ && r1 == r1_anterior_) {
       ++repetidas_;
     }
@@ -437,7 +445,7 @@ class NfsmwApp : public rex::ReXApp {
       REXLOG_INFO("[perfil] TODOS los hilos: {} muestras, {} sitios", muestras_otros_,
                   perfil_otros_.size());
       for (size_t i = 0; i < n2; ++i) {
-        REXLOG_INFO("[perfil]   {:5.1f}%  lr=0x{:08X}", 
+        REXLOG_INFO("[perfil]   {:5.1f}%  lr=0x{:08X}",
                     100.0 * double(o2[i].second) / double(muestras_otros_), o2[i].first);
       }
       perfil_otros_.clear();
@@ -452,9 +460,9 @@ class NfsmwApp : public rex::ReXApp {
   void VigilanteMain() {
     using Reloj = std::chrono::steady_clock;
 
-    // Cuantos segundos seguidos sin que se mueva NADA antes de dar la voz de
-    // alarma. Cinco es holgado: este juego a 10 fps sigue moviendo registros
-    // cien veces por segundo, asi que cinco segundos quietos no son lentitud.
+    // How many seconds in a row with NOTHING moving before raising the
+    // alarm. Five is generous: this game at 10 fps still moves registers a
+    // hundred times a second, so five quiet seconds isn't slowness.
     constexpr int kSegundosParaSospechar = 5;
     constexpr int kSegundosEntreVolcados = 15;
 
@@ -465,8 +473,8 @@ class NfsmwApp : public rex::ReXApp {
     bool avisado = false;
 
     while (vigilante_activo_) {
-      // El segundo de espera se gasta muestreando, no durmiendo de una vez.
-      // Ver MuestreaLr: mil muestras por segundo del hilo principal.
+      // The one-second wait is spent sampling, not sleeping all at once.
+      // See MuestreaLr: a thousand samples per second of the main thread.
       for (int ms = 0; ms < 1000 && vigilante_activo_; ++ms) {
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
         MuestreaLr();
@@ -478,11 +486,11 @@ class NfsmwApp : public rex::ReXApp {
         VuelcaPerfil();
       }
 
-      // PARCHE LOCAL - contador de fps en el log, sin abrir el F3.
+      // LOCAL PATCH - fps counter in the log, without opening F3.
       //
-      // El tic de este bucle es de un segundo y es el propio intervalo de
-      // medida: fotogramas nuevos del juego partido por el tiempo que ha
-      // pasado de verdad. Se imprime cada cinco.
+      // This loop's tick is one second and is itself the measurement
+      // interval: new game frames divided by the time that's actually
+      // passed. Printed every five ticks.
       const auto s = MideFotogramas(1.0);
       if (++desde_log_fps_ >= 5) {
         desde_log_fps_ = 0;
@@ -496,20 +504,21 @@ class NfsmwApp : public rex::ReXApp {
       auto hilos = kernel->object_table()->GetObjectsByType<rex::system::XThread>();
       if (hilos.empty()) continue;
 
-      // Una firma de "por donde va todo el mundo". No hace falta que sea
-      // buena como hash: solo tiene que cambiar si cambia algun registro.
+      // A signature for "where everything is at". It doesn't need to be a
+      // good hash: it just needs to change if any register changes.
       //
-      // OJO CON EL ORDEN. La primera version de esto multiplicaba y mezclaba
-      // sobre la marcha, recorriendo la lista tal cual venia. Y GetObjectsByType
-      // NO garantiza el orden: en los volcados reales los hilos salian barajados
-      // de una vuelta a otra, y hasta repetidos -el 0x6 aparecia dos veces-. O
-      // sea que la firma cambiaba sola aunque no se moviera nada, y la alarma
-      // no salto NUNCA en el cuelgue de verdad. Lo unico que sirvio de algo
-      // fueron las instantaneas periodicas de mas abajo.
+      // WATCH THE ORDER. The first version of this multiplied and mixed on
+      // the fly, walking the list as it came. And GetObjectsByType does NOT
+      // guarantee order: in real dumps the threads came out shuffled from
+      // one pass to the next, and even duplicated -0x6 showed up twice-. So
+      // the signature changed on its own even when nothing had moved, and
+      // the alarm NEVER fired on the real hang. The only thing that helped
+      // at all were the periodic snapshots below.
       //
-      // Se arregla metiendo cada hilo en un mapa por su id: el mapa ordena
-      // solo, asi que el barajado deja de importar, y un id repetido se
-      // machaca en vez de contarse dos veces. Recien entonces se mezcla.
+      // Fixed by putting each thread into a map keyed by its id: the map
+      // sorts on its own, so the shuffling stops mattering, and a repeated
+      // id gets overwritten instead of counted twice. Only then does it get
+      // mixed.
       std::map<uint32_t, uint64_t> por_hilo;
       for (auto& h : hilos) {
         auto* estado = h->thread_state();
@@ -526,21 +535,21 @@ class NfsmwApp : public rex::ReXApp {
         firma = (firma ^ huella) * 1099511628211ull;
       }
 
-      // INSTANTANEA PERIODICA, PASE LO QUE PASE.
+      // PERIODIC SNAPSHOT, NO MATTER WHAT.
       //
-      // La alarma de arriba solo salta si NADA se mueve, y resulto que el
-      // cuelgue que perseguimos no es de ese tipo: los registros seguian
-      // cambiando, o sea que el juego ejecuta codigo pero no avanza. Un bucle
-      // cerrado esperando algo que no llega se ve igual de parado por fuera y
-      // sin embargo la alarma no lo pilla.
+      // The alarm above only fires if NOTHING moves, and it turns out the
+      // hang we're chasing isn't of that kind: the registers kept changing,
+      // meaning the game executes code but doesn't progress. A tight loop
+      // waiting for something that never arrives looks just as stopped from
+      // the outside, yet the alarm doesn't catch it.
       //
-      // Para eso esta esto: cada diez segundos se apunta por donde va cada
-      // hilo, haya o no problema. Cuando el juego se congela, quedan dos o
-      // tres instantaneas del rato malo, y si lr da vueltas entre las mismas
-      // dos o tres direcciones, ahi esta el bucle.
+      // That's what this is for: every ten seconds it records where each
+      // thread is, problem or not. When the game freezes, two or three
+      // snapshots of the bad stretch remain, and if lr is bouncing between
+      // the same two or three addresses, there's the loop.
       //
-      // Va a nivel debug -no molesta en uso normal- y son unas pocas lineas
-      // cada diez segundos.
+      // Logged at debug level -doesn't get in the way during normal use- and
+      // it's a handful of lines every ten seconds.
       if (++desde_instantanea >= 10) {
         desde_instantanea = 0;
         REXLOG_DEBUG("[vigilante] instantanea: {} hilos del juego", hilos.size());
@@ -572,12 +581,12 @@ class NfsmwApp : public rex::ReXApp {
     }
   }
 
-  // Solo los toca el hilo del vigilante, que es el unico que mide.
+  // Only touched by the watchdog thread, which is the only one measuring.
   rex::ui::FrameStats stats_{};
   uint64_t fotogramas_previos_ = 0;
   int desde_log_fps_ = 0;
 
-  // Perfilador, tambien solo del hilo del vigilante.
+  // Profiler, also only touched by the watchdog thread.
   static constexpr int kSegundosEntrePerfiles = 20;
   rex::system::object_ref<rex::system::XThread> principal_;
   std::map<uint32_t, uint64_t> perfil_;
