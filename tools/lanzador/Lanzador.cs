@@ -267,6 +267,35 @@ namespace NfsmwRecomp
             { "x4  - 16 veces los pixeles",    "4" },
         };
 
+        // Antialiasing por postproceso (--swap_post_effect). El valor es el que
+        // espera el cvar del recomp: none / fxaa / fxaa_extreme. Se aplica al
+        // reiniciar el juego, igual que la resolucion.
+        private static readonly string[,] Antialias = {
+            { "Desactivado",  "none" },
+            { "FXAA",         "fxaa" },
+            { "FXAA Extreme", "fxaa_extreme" },
+        };
+
+        // Filtrado anisotropico (--anisotropic_override). El recomp fuerza el
+        // filtrado de texturas aunque el juego no lo pida; 0 lo apaga.
+        private static readonly string[,] Anisotropico = {
+            { "Desactivado (bilinear)", "0" },
+            { "1x",                     "1" },
+            { "2x",                     "2" },
+            { "4x",                     "3" },
+            { "8x",                     "4" },
+            { "16x",                    "5" },
+        };
+
+        // Efecto al pasar la imagen final a la ventana (--present_effect). Son
+        // los que trae el SDK de ReXGlue (FidelityFX); si este runtime no los
+        // tuviera, el cvar rechaza el valor y se queda en bilinear, sin romper.
+        private static readonly string[,] Efectos = {
+            { "Ninguno (bilinear)", "bilinear" },
+            { "CAS (nitidez)",      "cas" },
+            { "FSR (FidelityFX)",   "fsr" },
+        };
+
         // ---- Donde estamos ----------------------------------------------------
         private string raiz;
         private string exeJuego;
@@ -278,8 +307,8 @@ namespace NfsmwRecomp
 
         // ---- Controles --------------------------------------------------------
         private TextBox txtIso;
-        private ComboBox cboRes, cboEsc;
-        private NumericUpDown numAncho, numAlto, numFps;
+        private ComboBox cboRes, cboEsc, cboAA, cboAniso, cboEfecto, cboMon;
+        private NumericUpDown numAncho, numAlto, numFps, numNitidez;
         private RadioButton rbCompleta, rbVentana;
         private CheckBox chkVsync, chkLimite;
         private RadioButton rbVidAuto, rbVidRtv, rbVidRov;
@@ -421,9 +450,24 @@ namespace NfsmwRecomp
         //  La ventana
         // ---------------------------------------------------------------------
         private const int AnchoBanda = 380;
-        private const int AltoUtil = 792;
+        private const int AltoUtil = 1030;
         private const int X0 = AnchoBanda + 20;   // margen izquierdo de la columna
         private const int AnchoCol = 580;
+
+        private static string[,] Monitores()
+        {
+            Screen[] pantallas = Screen.AllScreens;
+            string[,] m = new string[pantallas.Length + 1, 2];
+            m[0, 0] = "Automatico (predeterminado)";
+            m[0, 1] = "0";
+            for (int i = 0; i < pantallas.Length; i++)
+            {
+                m[i + 1, 0] = "Monitor " + (i + 1) + " - " + pantallas[i].Bounds.Width + "x" +
+                              pantallas[i].Bounds.Height + " (" + pantallas[i].DeviceName + ")";
+                m[i + 1, 1] = (i + 1).ToString(CultureInfo.InvariantCulture);
+            }
+            return m;
+        }
 
         private void Construir()
         {
@@ -487,7 +531,7 @@ namespace NfsmwRecomp
             // Se llamaban "Resolucion de salida" y "Escala de renderizado", y
             // con esos nombres es facil tocar el primero esperando lo segundo,
             // ver que no cambia nada y darlo por roto.
-            GroupBox gPant = Grupo("Pantalla y resolucion", 96, 214);
+            GroupBox gPant = Grupo("Pantalla y resolucion", 96, 252);
 
             gPant.Controls.Add(Etiqueta("Tamano de la ventana", 14, 26, 150));
             cboRes = new ComboBox();
@@ -528,13 +572,69 @@ namespace NfsmwRecomp
             gPant.Controls.Add(rbCompleta);
             gPant.Controls.Add(rbVentana);
 
-            gPant.Controls.Add(Nota(14, 172, AnchoCol - 40, 36,
+            gPant.Controls.Add(Etiqueta("Monitor de salida", 14, 180, 150));
+            cboMon = new ComboBox();
+            cboMon.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboMon.Location = new Point(168, 177);
+            cboMon.Size = new Size(200, 23);
+            string[,] mon = Monitores();
+            for (int i = 0; i < mon.GetLength(0); i++)
+                cboMon.Items.Add(mon[i, 0]);
+            cboMon.SelectedIndexChanged += delegate { Refrescar(); };
+            gPant.Controls.Add(cboMon);
+
+            gPant.Controls.Add(Nota(14, 214, AnchoCol - 40, 36,
                 "No son lo mismo: el tamano de la ventana solo AGRANDA la imagen. La que la " +
                 "hace mas fina es la resolucion interna, que es el mismo \"x2\" de los " +
                 "emuladores, y cuesta cara: x2 son cuatro veces los pixeles a dibujar."));
 
+            // ---- Calidad de imagen ---------------------------------------------
+            //
+            // Todo son cvars del SDK de ReXGlue que el recomp lee por linea de
+            // comandos; aqui no se toca el juego ni el runtime.
+            GroupBox gCal = Grupo("Calidad de imagen", 352, 196);
+
+            gCal.Controls.Add(Etiqueta("Antialiasing", 14, 26, 150));
+            cboAA = new ComboBox();
+            cboAA.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboAA.Location = new Point(168, 23);
+            cboAA.Size = new Size(200, 23);
+            for (int i = 0; i < Antialias.GetLength(0); i++)
+                cboAA.Items.Add(Antialias[i, 0]);
+            cboAA.SelectedIndexChanged += delegate { Refrescar(); };
+            gCal.Controls.Add(cboAA);
+
+            gCal.Controls.Add(Etiqueta("Filtrado anisotropico", 14, 58, 150));
+            cboAniso = new ComboBox();
+            cboAniso.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboAniso.Location = new Point(168, 55);
+            cboAniso.Size = new Size(200, 23);
+            for (int i = 0; i < Anisotropico.GetLength(0); i++)
+                cboAniso.Items.Add(Anisotropico[i, 0]);
+            cboAniso.SelectedIndexChanged += delegate { Refrescar(); };
+            gCal.Controls.Add(cboAniso);
+
+            gCal.Controls.Add(Etiqueta("Efecto de acabado", 14, 90, 150));
+            cboEfecto = new ComboBox();
+            cboEfecto.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboEfecto.Location = new Point(168, 87);
+            cboEfecto.Size = new Size(200, 23);
+            for (int i = 0; i < Efectos.GetLength(0); i++)
+                cboEfecto.Items.Add(Efectos[i, 0]);
+            cboEfecto.SelectedIndexChanged += delegate { Refrescar(); };
+            gCal.Controls.Add(cboEfecto);
+
+            gCal.Controls.Add(Etiqueta("Nitidez (CAS)", 14, 122, 150));
+            numNitidez = Numero(168, 119, 90, 0, 100);
+            gCal.Controls.Add(numNitidez);
+            gCal.Controls.Add(Etiqueta("%", 264, 122, 20));
+
+            gCal.Controls.Add(Nota(14, 156, AnchoCol - 40, 34,
+                "El anisotropico afina las texturas y el acabado remata la imagen al pasarla " +
+                "a la ventana. Se aplican al reiniciar el juego."));
+
             // ---- Fotogramas ---------------------------------------------------
-            GroupBox gFps = Grupo("Fotogramas", 318, 124);
+            GroupBox gFps = Grupo("Fotogramas", 556, 124);
 
             chkVsync = Marca("Sincronizacion vertical (vsync)", 14, 24, 250);
             gFps.Controls.Add(chkVsync);
@@ -550,7 +650,7 @@ namespace NfsmwRecomp
                 "de esto: se ajusta desde el menu de F4."));
 
             // ---- Motor de video ------------------------------------------------
-            GroupBox gVideo = Grupo("Motor de video (emulacion de la EDRAM)", 450, 92);
+            GroupBox gVideo = Grupo("Motor de video (emulacion de la EDRAM)", 688, 92);
 
             rbVidAuto = Radio("Automatico", 14, 24, 110);
             rbVidRtv = Radio("Rapido (rtv)", 134, 24, 120);
@@ -567,7 +667,7 @@ namespace NfsmwRecomp
             //
             // ESTE GRUPO ES UNA SALIDA DE EMERGENCIA, Y POR ESO NO TIENE
             // 'AUTOMATICO'. Ver el comentario largo de ConstruirArgumentos.
-            GroupBox gApi = Grupo("API grafica", 550, 92);
+            GroupBox gApi = Grupo("API grafica", 788, 92);
 
             rbApiDx = Radio("DirectX 12 (recomendada)", 14, 24, 190);
             rbApiVk = Radio("Vulkan (experimental)", 214, 24, 190);
@@ -580,13 +680,13 @@ namespace NfsmwRecomp
 
             // ---- Aviso del parche -------------------------------------------
             lblParche = new Label();
-            lblParche.Location = new Point(X0, 650);
+            lblParche.Location = new Point(X0, 888);
             lblParche.Size = new Size(AnchoCol, 32);
             lblParche.ForeColor = Color.Firebrick;
             Controls.Add(lblParche);
 
             // ---- Lo que se va a ejecutar -------------------------------------
-            GroupBox gCmd = Grupo("Lo que se va a ejecutar", 684, 60);
+            GroupBox gCmd = Grupo("Lo que se va a ejecutar", 922, 60);
             txtCmd = new TextBox();
             txtCmd.Location = new Point(12, 20);
             txtCmd.Size = new Size(AnchoCol - 32, 32);
@@ -600,7 +700,7 @@ namespace NfsmwRecomp
             // ---- Botones ------------------------------------------------------
             btnJugar = new Button();
             btnJugar.Text = "JUGAR";
-            btnJugar.Location = new Point(X0 + AnchoCol - 230, 754);
+            btnJugar.Location = new Point(X0 + AnchoCol - 230, 992);
             btnJugar.Size = new Size(120, 30);
             btnJugar.Font = new Font("Segoe UI", 9.75f, FontStyle.Bold);
             btnJugar.Click += Jugar;
@@ -609,13 +709,13 @@ namespace NfsmwRecomp
 
             btnSalir = new Button();
             btnSalir.Text = "Salir";
-            btnSalir.Location = new Point(X0 + AnchoCol - 100, 754);
+            btnSalir.Location = new Point(X0 + AnchoCol - 100, 992);
             btnSalir.Size = new Size(100, 30);
             btnSalir.Click += delegate { Close(); };
             Controls.Add(btnSalir);
 
             lblEstado = new Label();
-            lblEstado.Location = new Point(X0, 760);
+            lblEstado.Location = new Point(X0, 998);
             lblEstado.Size = new Size(320, 32);
             lblEstado.ForeColor = Color.DimGray;
             Controls.Add(lblEstado);
@@ -633,6 +733,7 @@ namespace NfsmwRecomp
             numAncho.ValueChanged += r;
             numAlto.ValueChanged += r;
             numFps.ValueChanged += r;
+            numNitidez.ValueChanged += r;
         }
 
         // ---- Fabriquitas de controles, para no repetir seis lineas cada vez ----
@@ -721,6 +822,20 @@ namespace NfsmwRecomp
             int e = IndiceDe(cboEsc, Cadena(a, "escala", "1x  - nativa del juego"));
             cboEsc.SelectedIndex = e >= 0 ? e : 0;
 
+            int mo = IndiceDe(cboMon, Cadena(a, "monitor", "Automatico (predeterminado)"));
+            cboMon.SelectedIndex = mo >= 0 ? mo : 0;
+
+            int aa = IndiceDe(cboAA, Cadena(a, "antialiasing", "Desactivado"));
+            cboAA.SelectedIndex = aa >= 0 ? aa : 0;
+
+            int an = IndiceDe(cboAniso, Cadena(a, "anisotropico", "8x"));
+            cboAniso.SelectedIndex = an >= 0 ? an : 4;
+
+            int ef = IndiceDe(cboEfecto, Cadena(a, "efecto", "Ninguno (bilinear)"));
+            cboEfecto.SelectedIndex = ef >= 0 ? ef : 0;
+
+            numNitidez.Value = Acotar(numNitidez, Entero(a, "nitidez", 50));
+
             bool completa = Booleano(a, "pantalla", true);
             rbCompleta.Checked = completa;
             rbVentana.Checked = !completa;
@@ -754,10 +869,15 @@ namespace NfsmwRecomp
                 sb.AppendLine("  \"ancho\":  " + ((int)numAncho.Value) + ",");
                 sb.AppendLine("  \"alto\":  " + ((int)numAlto.Value) + ",");
                 sb.AppendLine("  \"escala\":  \"" + Json.Escapar(TextoDe(cboEsc)) + "\",");
+                sb.AppendLine("  \"monitor\":  \"" + Json.Escapar(TextoDe(cboMon)) + "\",");
                 sb.AppendLine("  \"pantalla\":  " + (rbCompleta.Checked ? "true" : "false") + ",");
                 sb.AppendLine("  \"vsync\":  " + (chkVsync.Checked ? "true" : "false") + ",");
                 sb.AppendLine("  \"limitar\":  " + (chkLimite.Checked ? "true" : "false") + ",");
                 sb.AppendLine("  \"fps\":  " + ((int)numFps.Value) + ",");
+                sb.AppendLine("  \"antialiasing\":  \"" + Json.Escapar(TextoDe(cboAA)) + "\",");
+                sb.AppendLine("  \"anisotropico\":  \"" + Json.Escapar(TextoDe(cboAniso)) + "\",");
+                sb.AppendLine("  \"efecto\":  \"" + Json.Escapar(TextoDe(cboEfecto)) + "\",");
+                sb.AppendLine("  \"nitidez\":  " + ((int)numNitidez.Value) + ",");
                 sb.AppendLine("  \"video\":  \"" + VideoElegido() + "\",");
                 sb.AppendLine("  \"api\":  \"" + ApiElegida() + "\"");
                 sb.Append("}");
@@ -853,6 +973,43 @@ namespace NfsmwRecomp
             return rbApiVk.Checked ? "vulkan" : "d3d12";
         }
 
+        private string AAElegida()
+        {
+            int i = cboAA.SelectedIndex;
+            if (i < 0)
+                return "none";
+            return Antialias[i, 1];
+        }
+
+        private int AnisotropicoElegido()
+        {
+            int i = cboAniso.SelectedIndex;
+            if (i < 0)
+                return 4;
+            return int.Parse(Anisotropico[i, 1], CultureInfo.InvariantCulture);
+        }
+
+        private string EfectoElegido()
+        {
+            int i = cboEfecto.SelectedIndex;
+            if (i < 0)
+                return "bilinear";
+            return Efectos[i, 1];
+        }
+
+        private decimal NitidezElegida()
+        {
+            return ((decimal)numNitidez.Value) / 100m;
+        }
+
+        private int MonitorElegido()
+        {
+            int i = cboMon.SelectedIndex;
+            if (i <= 0 || i > Screen.AllScreens.Length)
+                return 0;
+            return i;
+        }
+
         private string ConstruirArgumentos()
         {
             List<string> a = new List<string>();
@@ -891,7 +1048,21 @@ namespace NfsmwRecomp
             if (esc > 1)
                 a.Add("--resolution_scale " + esc);
 
+            // Antialiasing: SIEMPRE se pasa, como la API. Asi elegir
+            // "Desactivado" aqui gana a lo que diga nfsmw.toml, en vez de
+            // devolverle el mando al fichero.
+            a.Add("--swap_post_effect=" + AAElegida());
+
+            // Calidad de imagen: aniso y nitidez siempre (manda esta ventana);
+            // el efecto de acabado solo cuando no es el de siempre.
+            a.Add("--anisotropic_override " + AnisotropicoElegido());
+            if (EfectoElegido() != "bilinear")
+                a.Add("--present_effect=" + EfectoElegido());
+            a.Add("--present_cas_additional_sharpness " +
+                  string.Format(CultureInfo.InvariantCulture, "{0:0.##}", NitidezElegida()));
+
             a.Add(rbCompleta.Checked ? "--fullscreen=true" : "--fullscreen=false");
+            a.Add("--monitor " + MonitorElegido());
             a.Add(chkVsync.Checked ? "--vsync=true" : "--vsync=false");
             if (chkLimite.Checked)
                 a.Add("--max_fps " + ((int)numFps.Value));
