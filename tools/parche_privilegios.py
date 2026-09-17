@@ -1,32 +1,31 @@
 #!/usr/bin/env python3
 """
-Deja conceder los privilegios de Xbox Live, para poder entrar al multijugador.
+Allow Xbox Live privileges to be granted, so you can get into multiplayer.
 
     python tools/parche_privilegios.py            aplicar
     python tools/parche_privilegios.py --estado
     python tools/parche_privilegios.py --revertir
 
-Toca un fichero del SDK:  src/kernel/xam/xam_user.cpp
+Touches one SDK file:  src/kernel/xam/xam_user.cpp
 
-No guarda .original: aplica y deshace por sustitucion de texto exacta, bloque a
-bloque, como los demas parches de este proyecto.
+Doesn't save a .original: it applies and undoes itself by exact text
+substitution, block by block, like the other patches in this project.
 
 
-DE DONDE SALE ESTO
+WHERE THIS COMES FROM
 ==================
 
-Al entrar al multijugador, el juego saca este cartel:
+When entering multiplayer, the game shows this message:
 
-    ATENCION
-    Los privilegios que tienes en Xbox Live no te permiten acceder a esta
-    funcion.
+    ATTENTION
+    Your Xbox Live account privileges do not allow you to access this
+    feature.
 
-No es un fallo ni un cuelgue: es un NO limpio, y llega mucho antes de que se
-toque la red. El juego pregunta por sus privilegios y se le contesta que no
-tiene ninguno.
+It's not a bug or a hang: it's a clean NO, and it happens well before the
+network is even touched. The game asks about its privileges and is told it
+has none.
 
-La respuesta esta en xam_user.cpp, y el comentario original no deja lugar a
-dudas:
+The answer lives in xam_user.cpp, and the original comment leaves no doubt:
 
     u32 XamUserCheckPrivilege_entry(u32 user_index, u32 mask, mapped_u32 out_value) {
       ...
@@ -35,63 +34,63 @@ dudas:
       return X_ERROR_SUCCESS;
     }
 
-Deniega TODOS los privilegios, siempre, sea cual sea el que se pregunte. Viene
-de Xenia y para un emulador sin Xbox Live tiene su logica: si el juego se cree
-sin permisos, ni lo intenta, y te ahorras que se cuelgue contra unos servidores
-que llevan años apagados.
+It denies ALL privileges, always, no matter which one is being asked about.
+It comes from Xenia, and for an emulator without Xbox Live it makes sense:
+if the game believes it has no permissions, it won't even try, and you avoid
+it hanging against servers that have been offline for years.
 
-Lo raro es que el resto del SDK dice justo lo contrario:
+The odd part is that the rest of the SDK says exactly the opposite:
 
-    XamUserIsOnlineEnabled   -> 1        (hay conexion)
-    XamUserGetMembershipTier -> 6        (que es Gold)
-    user_profile.signin_state -> 1       (hay sesion iniciada)
-    user_profile.type         -> 1 | 2   (perfil local y online)
+    XamUserIsOnlineEnabled   -> 1        (there is a connection)
+    XamUserGetMembershipTier -> 6        (which is Gold)
+    user_profile.signin_state -> 1       (there is a signed-in session)
+    user_profile.type         -> 1 | 2   (local and online profile)
 
-O sea que la unica pieza que dice que no es esta. El perfil esta montado, la
-sesion iniciada y la membresia es Gold; solo faltan los permisos.
+So this is the only piece saying no. The profile is set up, the session is
+signed in, and the membership is Gold; only the permissions are missing.
 
 
-LO QUE ESTO NO ARREGLA, QUE ES LO IMPORTANTE
+WHAT THIS DOES NOT FIX, WHICH IS THE IMPORTANT PART
 ============================================
 
-Esto abre la PUERTA del menu. No hace que el multijugador funcione. Detras
-sigue faltando media capa de red, y conviene saberlo antes de probar para no
-llevarse un chasco:
+This opens the menu's DOOR. It does not make multiplayer work. Behind it,
+half of the network layer is still missing, and it's worth knowing that
+before testing so you don't get your hopes up for nothing:
 
-  - De las 158 funciones de red que declara la tabla de ordinales del SDK, 114
-    no tienen implementacion. Entre ellas estan justo las del System Link:
+  - Of the 158 network functions declared in the SDK's ordinal table, 114
+    have no implementation. Among them are exactly the System Link ones:
 
         0x36  XNetCreateKey          0x41  XNetConnect
         0x37  XNetRegisterKey        0x42  XNetGetConnectStatus
         0x38  XNetUnregisterKey      0x53  XNetGetSystemLinkPort
         0x3F  XNetUnregisterInAddr   0x09  getsockname
 
-    Ese trio CreateKey/RegisterKey/UnregisterKey es el que asocia la XNKID y
-    la XNKEY de la partida; XNetConnect y XNetGetConnectStatus son los que
-    levantan el enlace con el otro equipo.
+    That CreateKey/RegisterKey/UnregisterKey trio is what associates the
+    match's XNKID and XNKEY; XNetConnect and XNetGetConnectStatus are what
+    establish the link with the other machine.
 
-  - Los manejadores de sesion de xam/apps/xgi_app.cpp son de adorno: leen los
-    parametros, los escriben en el log y devuelven X_E_SUCCESS sin hacer nada.
-    XSessionSearch ni siquiera toca el buffer de resultados, asi que un cliente
-    buscando partidas siempre encontrara cero.
+  - The session handlers in xam/apps/xgi_app.cpp are just for show: they
+    read the parameters, write them to the log, and return X_E_SUCCESS
+    without doing anything. XSessionSearch doesn't even touch the results
+    buffer, so a client searching for matches will always find zero.
 
-Asi que la utilidad de este parche es AVERIGUAR DONDE ESTA EL SIGUIENTE MURO.
-Con el puesto, el menu deberia dejarte pasar, y lo que salga en el log a partir
-de ahi dice que necesita este juego en concreto, que puede ser bastante menos
-de lo que falta en total.
+So the usefulness of this patch is FINDING OUT WHERE THE NEXT WALL IS. With
+it applied, the menu should let you through, and whatever shows up in the
+log from there on tells you what this particular game needs, which could be
+considerably less than what's missing overall.
 
 
-VIENE APAGADO
+COMES OFF BY DEFAULT
 =============
 
-El ajuste nuevo es  grant_user_privileges  y por defecto esta en false, o sea
-que el comportamiento no cambia hasta que tu lo enciendas. Se lee en CADA
-llamada, asi que se puede encender desde el menu de F4 sin reiniciar el juego:
-lo enciendes, sales del menu del multijugador y vuelves a entrar.
+The new setting is  grant_user_privileges  and it defaults to false, so
+behavior doesn't change until you turn it on. It's read on EVERY call, so it
+can be turned on from the F4 menu without restarting the game: turn it on,
+leave the multiplayer menu, and go back in.
 
-Si al concederlos el juego se pone a intentar cosas de Xbox Live y se cuelga,
-apagalo y vuelves a estar como antes. Por eso es un interruptor y no un cambio
-fijo.
+If granting the privileges makes the game start attempting Xbox Live things
+and it hangs, turn it back off and you're right back to how things were.
+That's why it's a switch and not a permanent change.
 """
 
 import argparse
@@ -173,9 +172,9 @@ BLOQUES = [
 ]
 
 
-# Todavia no ha habido ninguna version anterior de este parche. La lista existe
-# para que la maquinaria de migracion sea la misma que en los demas scripts: el
-# dia que haya una v2, se anade aqui y ya funciona.
+# There hasn't been a previous version of this patch yet. The list exists so
+# that the migration machinery is the same as in the other scripts: the day
+# there's a v2, it gets added here and it just works.
 VIEJOS = []
 
 
@@ -189,16 +188,16 @@ def localizar_sdk():
 
 
 def quitar_version_vieja(txt):
-    """Quita los restos de una version anterior de este mismo parche.
+    """Removes leftovers from a previous version of this same patch.
 
-    Misma regla que en los otros parches del proyecto: encontrar el bloque
-    viejo solo cuenta si NO puede ser el bueno visto a medias.
+    Same rule as in the other patches in this project: finding the old block
+    only counts if it can NOT be the good one seen halfway applied.
 
         es_de_verdad_vieja = (viejo in txt) and
                              (viejo not in nuevo or nuevo not in txt)
 
-    Ver parche_backend.py, donde esta contado entero y donde costo tres
-    intentos dar con ella.
+    See parche_backend.py, where this is explained in full and where it took
+    three tries to get right.
     """
     ahora = {ancla: nuevo for _, ancla, nuevo in BLOQUES}
     quitados = 0

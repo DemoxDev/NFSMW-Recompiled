@@ -1,69 +1,72 @@
 #!/usr/bin/env python3
 """
-Escucha la conversacion entre el juego y el XMA, del lado del kernel.  (v3)
+Listens to the conversation between the game and the XMA, from the kernel side.  (v3)
 
     python tools/parche_anillo.py            aplicar
     python tools/parche_anillo.py --estado
     python tools/parche_anillo.py --revertir
 
-Toca un fichero del SDK:  src/kernel/xboxkrnl/xboxkrnl_audio_xma.cpp
+Touches an SDK file:  src/kernel/xboxkrnl/xboxkrnl_audio_xma.cpp
 
 
-DONDE ESTAMOS
+WHERE WE ARE
 =============
 
-El cuelgue esta acorralado hasta el milisegundo. Esta es la voz 19 muriendo,
-tal cual salio en el log:
+The hang is cornered down to the millisecond. This is voice 19 dying,
+exactly as it came out in the log:
 
-    57.907  Work escritura=8  lectura=12  hueco=4     <- ultimo pase que produjo
-    57.924  Work escritura=12 lectura=16  hueco=4     NO PRODUJO NADA ent0=0 ent1=0
-    57.935  Work escritura=12 lectura=20  hueco=8     NO PRODUJO NADA ent0=0 ent1=0
-    57.945  Work escritura=12 lectura=0   hueco=12    NO PRODUJO NADA ent0=0 ent1=0
-    57.964  Work escritura=12 lectura=4   hueco=16    NO PRODUJO NADA ent0=0 ent1=0
-    57.974  Work escritura=12 lectura=8   hueco=20    NO PRODUJO NADA ent0=0 ent1=0
+    57.907  Work escritura=8  lectura=12  hueco=4     <- last pass that produced
+    57.924  Work escritura=12 lectura=16  hueco=4     PRODUCED NOTHING ent0=0 ent1=0
+    57.935  Work escritura=12 lectura=20  hueco=8     PRODUCED NOTHING ent0=0 ent1=0
+    57.945  Work escritura=12 lectura=0   hueco=12    PRODUCED NOTHING ent0=0 ent1=0
+    57.964  Work escritura=12 lectura=4   hueco=16    PRODUCED NOTHING ent0=0 ent1=0
+    57.974  Work escritura=12 lectura=8   hueco=20    PRODUCED NOTHING ent0=0 ent1=0
     58.333  [guest] pide escritura: escritura=12 lectura=8 valida=1 ent0=0 ent1=0
-            ... y esa misma linea 90 segundos seguidos.
+            ... and that same line for 90 seconds straight.
 
-O sea: a las 57.907 el descodificador gasta lo ultimo que tenia de entrada.
-Los dos buffers de entrada quedan en cero. El juego sigue dando kicks cinco
-veces mas y sigue consumiendo lo que quedaba -la lectura avanza 16, 20, 0, 4,
-8-, y al llegar a 8 se para en seco. La escritura lleva congelada en 12 desde
-el principio de esa tanda, porque no hay nada que descodificar.
+In other words: at 57.907 the decoder uses up the last input it had left.
+Both input buffers end up at zero. The game keeps kicking five more times
+and keeps consuming what was left -the read offset advances 16, 20, 0, 4,
+8-, and upon reaching 8 it stops dead. The write offset has been frozen at
+12 since the start of that batch, because there is nothing left to decode.
 
-La lectura se queda a UN PASO de alcanzar la escritura. Y eso importa, porque
-el bucle del juego solo pregunta si el buffer de salida sigue valido cuando
-lectura y escritura coinciden. Al quedarse a un bloque, no llega a preguntar
-nunca, y se queda esperando audio que no puede llegar.
+The read offset stays ONE STEP away from reaching the write offset. And that
+matters, because the game loop only asks whether the output buffer is still
+valid when the read and write offsets match. By staying one block short, it
+never gets to ask, and it's left waiting for audio that can never arrive.
 
 
-LO QUE FALTA POR SABER, Y POR QUE NO SE SUPO ANTES
+WHAT'S STILL UNKNOWN, AND WHY IT WASN'T KNOWN BEFORE
 ==================================================
 
-La pregunta que queda es una sola: DESPUES de las 57.907, el juego le vuelve a
-dar entrada a esa voz?
+There's only one question left: AFTER 57.907, does the game ever give that
+voice input again?
 
-  - Si NO se la da, el fallo esta en el juego: se ha metido en el bucle antes
-    de rellenar, y hay que mirar por que llego a quedarse sin datos.
-  - Si SI se la da y el descodificador sigue diciendo ent0=0 ent1=0, entonces
-    la estamos perdiendo nosotros al recibirla, y el fallo es del SDK.
+  - If it does NOT, the bug is in the game: it entered the loop before
+    refilling, and we need to find out why it ran out of data.
+  - If it DOES and the decoder still reports ent0=0 ent1=0, then we're
+    losing it on our end when receiving it, and the bug is in the SDK.
 
-La v2 no lo pudo contestar por un fallo mio: puse UN limite de una linea por
-segundo a todas las funciones por igual. Tiene sentido para las dos que el
-juego consulta miles de veces por segundo en el bucle, pero no para las que
-ESCRIBEN, que se llaman a un ritmo normal. Con ese limite, de las entregas de
-entrada solo se veia una por segundo, y ademas la que tocara de cualquier
-contexto, no del que interesa.
+v2 could not answer this because of a mistake of mine: I put ONE limit of
+one line per second on all functions alike. That makes sense for the two
+that the game polls thousands of times per second in the loop, but not for
+the ones that WRITE, which are called at a normal rate. With that limit,
+only one input delivery per second was visible, and on top of that,
+whichever one happened to come from any context, not the one that mattered.
 
-Asi que ahora:
+So now:
 
-  - las de consulta -pedir offsets, preguntar validez- siguen limitadas
-  - las que ESCRIBEN van sin limite: dar entrada, entregar el buffer con su
-    cuenta de paquetes, mover la lectura, revalidar la salida, apagar
+  - the query ones -asking for offsets, asking for validity- are still
+    limited
+  - the ones that WRITE go unlimited: giving input, delivering the buffer
+    with its packet count, moving the read offset, revalidating the output,
+    shutting down
 
-Los kicks ya salen enteros por el otro parche, asi que no hacen falta aqui.
+The kicks already come through in full via the other patch, so they aren't
+needed here.
 
-Con esto, el tramo entre las 57.907 y el cuelgue queda registrado entero y la
-pregunta se contesta sola.
+With this, the stretch between 57.907 and the hang gets logged in full, and
+the question answers itself.
 """
 
 import argparse
@@ -85,11 +88,11 @@ CAB_NUEVO = """#include <atomic>   // PARCHE LOCAL - escucha de la conversacion 
 #include <cstring>
 """
 
-# El ayudante y la primera funcion instrumentada van juntos, para no depender
-# de un anclaje mas en la cabecera del namespace.
-# El ayudante tiene que quedar declarado ANTES de su primer uso, y la primera
-# funcion que lo usa en este fichero es XMAIsInputBuffer0Valid, que aparece
-# bastante antes que las de salida. Por eso el bloque cuelga de esa.
+# The helper and the first instrumented function go together, so as not to
+# depend on yet another anchor in the namespace header.
+# The helper has to be declared BEFORE its first use, and the first function
+# that uses it in this file is XMAIsInputBuffer0Valid, which appears well
+# before the output ones. That's why the block hangs off that one.
 AYUDA_ANCLA = """u32 XMAIsInputBuffer0Valid_entry(mapped_void context_ptr) {
   XMA_CONTEXT_DATA context(context_ptr);
   return context.input_buffer_0_valid;
@@ -195,7 +198,7 @@ PARES = [
 }
 """),
 
-# --- la entrada, que es lo nuevo y lo que importa ---
+# --- the input, which is what's new and what matters ---
 ("""u32 XMASetInputBuffer0Valid_entry(mapped_void context_ptr) {
   XMA_CONTEXT_DATA context(context_ptr);
   context.input_buffer_0_valid = 1;
@@ -309,8 +312,8 @@ def main():
         print(f"[ok] {f.name}: ya estaba al dia, no lo toco")
         return 0
 
-    # La version anterior de este parche dejaba sus lineas por medio, y los
-    # anclajes de abajo estan escritos contra el fichero limpio.
+    # The previous version of this patch left its lines lying around, and
+    # the anchors below are written against the clean file.
     if any(m in txt for m in MARCAS_VIEJAS):
         if not orig.exists():
             sys.exit(f"[ERROR] {f.name} tiene la version anterior pero no hay\n"

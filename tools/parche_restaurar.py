@@ -1,87 +1,93 @@
 #!/usr/bin/env python3
 """
-Mejora el menu de ajustes (F4): boton de restaurar, y deslizadores.
+Improves the settings menu (F4): a restore button, and sliders.
 
     python tools/parche_restaurar.py            aplicar
     python tools/parche_restaurar.py --estado
     python tools/parche_restaurar.py --revertir
 
-Toca un fichero del SDK:  src/ui/overlay/settings_overlay.cpp
+Touches one SDK file:  src/ui/overlay/settings_overlay.cpp
 
-No guarda .original y no le hace falta: aplica y deshace por sustitucion de
-texto exacta, bloque a bloque. Es a proposito. En este SDK hay ficheros que ya
-llevan otro parche encima, y guardar ahi un ".original" a estas alturas
-guardaria el fichero YA parcheado como si fuera el limpio; de paso, un
---revertir se llevaria por delante el parche del otro. Asi cada parche quita
-lo suyo y solo lo suyo.
+It does not keep a .original and doesn't need one: it applies and undoes by
+exact text substitution, block by block. That's on purpose. This SDK has
+files that already carry another patch on top, and keeping a ".original" at
+this point would save the file that's ALREADY patched as if it were the clean
+one; on top of that, a --revertir would take the other patch down with it.
+This way each patch removes only what's its own, and nothing else.
 
-Y va bloque a bloque, no con una marca global, POR UN FALLO QUE YA PASO. La
-primera version solo traia el boton. Cuando le anadi los deslizadores, el
-script miraba si su marca estaba puesta, la encontraba -del boton- y decia "ya
-estaba" sin aplicar nada nuevo. Resultado: boton si, deslizador no, y sin un
-solo mensaje de error. Ahora cada bloque se comprueba por separado, asi que
-anadir uno mas en el futuro lo aplica sin tener que deshacer lo anterior.
-
-
-EL BOTON DE RESTAURAR
-=====================
-
-El menu de F4 ya trae un "Reset" por ajuste, pero solo en los keybinds, y hay
-que ir uno por uno. Probando cvars de rendimiento se tocan seis o siete en un
-rato y luego no hay forma de saber cuales quedaron movidos: los numeros
-siguientes ya no comparan contra nada.
-
-Vuelve a LA CONFIGURACION DE PARTIDA, no a los valores de fabrica del SDK. O
-sea: lo que el juego tenia puesto al abrirse, con el nfsmw.toml ya aplicado.
-Es lo que se espera de un "reset" aqui: si el toml deja el motor de video en
-rtv y el filtrado anisotropico apagado, restaurar tiene que dejarlo asi, no
-devolverte a unos valores del SDK que nunca has usado y que ademas van peor.
-
-Se hace con una foto de todos los ajustes tomada la primera vez que se abre
-esta ventana. En la practica esa foto ES el arranque, porque nada de aqui
-cambia solo; si hubieras tocado algo por la consola antes de abrir F4, esa
-seria la foto. Se dice en el aviso para que no sorprenda.
-
-Tres salvedades, y las tres importan:
-
-  - NO toca los de solo lectura. Se fijan al arrancar y la interfaz ya los
-    pinta deshabilitados; intentarlo seria mentir.
-
-  - NO escribe el nfsmw.toml. Solo cambia los valores vivos. Si quieres que el
-    reinicio quede igual, hay que darle despues a "Save to config". Asi un
-    clic sin querer no se lleva por delante la configuracion del disco.
-
-  - Los que piden reinicio se cambian igual, pero no se notan hasta la
-    siguiente vez que abras el juego.
-
-Antes de hacer nada pregunta, porque es destructivo y esta pegado al boton de
-guardar.
+And it goes block by block, not with a single global marker, BECAUSE OF A BUG
+THAT ALREADY HAPPENED. The first version only brought the button. When I added
+the sliders, the script checked whether its marker was already in place,
+found it -from the button- and said "already applied" without applying
+anything new. Result: button yes, slider no, and not a single error message.
+Now each block is checked separately, so adding one more in the future applies
+it without having to undo what came before.
 
 
-LOS DESLIZADORES
-================
+THE RESTORE BUTTON
+===================
 
-Los ajustes decimales se editaban con una caja de texto: escribir el numero y
-Enter. Para uno que se busca a tanteo -game_speed, por ejemplo- eso es
-incomodo, porque no puedes arrastrar y ver el efecto sobre la marcha.
+The F4 menu already has a "Reset" per setting, but only in the keybinds, and
+you have to go one by one. Testing performance cvars, you end up touching six
+or seven in a while and then there's no way to know which ones were left
+changed: the following numbers no longer compare against anything.
 
-Cuando el ajuste declara minimo y maximo, ahora sale un deslizador. Cuando no
-los declara se queda la caja de siempre, porque sin limites no hay por donde
-deslizar. Ctrl+clic sobre el deslizador sigue dejando escribir el valor exacto.
+It goes back to THE STARTING CONFIGURATION, not the SDK's factory values. In
+other words: whatever the game had set when it opened, with nfsmw.toml
+already applied. That's what you'd expect a "reset" to do here: if the toml
+leaves the video engine on rtv and anisotropic filtering off, restoring has to
+leave it that way, not send you back to SDK values you've never used and that
+are worse besides.
 
-Los decimales que ensenia salen del propio recorrido: si va de 0 a 200 -un
-porcentaje- se ve entero, y si va de 0 a 1 se ven tres decimales. Con un
-formato fijo, o los porcentajes salian como "100.00" o las barras cortas
-parecian rotas.
+It works from a snapshot of every setting taken the first time this window is
+opened. In practice that snapshot IS startup, because nothing here changes on
+its own; if you had changed something from the console before opening F4,
+that would be the snapshot. It's stated in the warning so it doesn't come as a
+surprise.
+
+Three exceptions, and all three matter:
+
+  - It does NOT touch read-only settings. They're fixed at startup and the
+    interface already draws them disabled; trying would be lying.
+
+  - It does NOT write nfsmw.toml. It only changes the live values. If you want
+    the change to survive a restart, you have to click "Save to config"
+    afterwards. That way an accidental click doesn't wipe out the
+    configuration on disk.
+
+  - Settings that require a restart do change the same way, but you won't
+    notice until the next time you open the game.
+
+It asks for confirmation before doing anything, because it's destructive and
+sits right next to the save button.
 
 
-POR QUE LOS TEXTOS ESTAN EN INGLES
-==================================
+THE SLIDERS
+============
 
-Los botones de al lado son "Save to config", "Rebind" y "Reset". Esa ventana
-es del SDK y esta entera en ingles; meter texto en castellano en medio se ve
-como un fallo, no como una traduccion. Los comentarios del codigo si van en
-castellano, como en el resto de parches de este proyecto.
+Decimal settings used to be edited with a text box: type the number and hit
+Enter. For one you search for by feel -game_speed, for example- that's
+awkward, because you can't drag and see the effect as you go.
+
+When a setting declares a minimum and maximum, a slider now shows up. When it
+doesn't declare them, it stays as the usual box, because without limits there
+is nothing to slide between. Ctrl+click on the slider still lets you type the
+exact value.
+
+The number of decimals shown comes from the range itself: if it goes from 0 to
+200 -a percentage- it shows as a whole number, and if it goes from 0 to 1 it
+shows three decimals. With a fixed format, either percentages came out as
+"100.00" or short bars looked broken.
+
+
+WHY THE TEXT IS IN ENGLISH
+============================
+
+The buttons next to it are "Save to config", "Rebind" and "Reset". That
+window belongs to the SDK and is entirely in English; putting Spanish text in
+the middle of it would look like a mistake, not a translation. The code
+comments, on the other hand, are in Spanish, as in the rest of this project's
+patches.
 """
 
 import argparse
@@ -89,7 +95,7 @@ import pathlib
 import sys
 
 # ---------------------------------------------------------------------------
-#  1) Cabeceras
+#  1) Headers
 # ---------------------------------------------------------------------------
 
 CAB_ANCLA = """#include <rex/ui/keybinds.h>
@@ -120,7 +126,7 @@ CAB_NUEVO = """#include <rex/logging.h>  // PARCHE LOCAL - para dejar constancia
 """
 
 # ---------------------------------------------------------------------------
-#  2) La foto de la configuracion de partida
+#  2) The snapshot of the starting configuration
 # ---------------------------------------------------------------------------
 
 FOTO_ANCLA = """void SettingsDialog::OnDraw(ImGuiIO& /*io*/) {
@@ -158,7 +164,7 @@ FOTO_NUEVO = """void SettingsDialog::OnDraw(ImGuiIO& /*io*/) {
 """
 
 # ---------------------------------------------------------------------------
-#  3) Deslizador para los decimales con limites
+#  3) Slider for decimals with limits
 # ---------------------------------------------------------------------------
 
 DOBLE_ANCLA = """      } else if (entry.type == rex::cvar::FlagType::Double) {
@@ -207,7 +213,7 @@ DOBLE_NUEVO = """      } else if (entry.type == rex::cvar::FlagType::Double) {
 """
 
 # ---------------------------------------------------------------------------
-#  4) La barra de abajo: el boton y su confirmacion
+#  4) The bottom bar: the button and its confirmation
 # ---------------------------------------------------------------------------
 
 BARRA_ANCLA = """  // Bottom bar: Save button.
@@ -304,14 +310,14 @@ BARRA_NUEVO = """  // Bottom bar: Save button.
 """
 
 # ---------------------------------------------------------------------------
-#  Version anterior de ESTE parche, para poder migrar
+#  Previous version of THIS patch, so it can be migrated
 #
-#  La v1 solo traia el boton, y restauraba a los valores de FABRICA del SDK en
-#  vez de a la configuracion de partida. Si sigue puesta hay que quitarla
-#  antes, o el anclaje del boton no encaja: su sitio esta ocupado.
+#  v1 only brought the button, and restored to the SDK's FACTORY values
+#  instead of the starting configuration. If it's still in place it has to be
+#  removed first, or the button's anchor won't match: its spot is taken.
 #
-#  Este texto esta sacado tal cual del fichero ya parcheado, no escrito a mano,
-#  para que la sustitucion sea exacta.
+#  This text is taken verbatim from the already-patched file, not written by
+#  hand, so the substitution is exact.
 # ---------------------------------------------------------------------------
 
 VIEJA_BARRA = '  // Bottom bar: Save button.\n  ImGui::Separator();\n  if (ImGui::Button("Save to config")) {\n    rex::cvar::SaveConfig(config_path_);\n  }\n  ImGui::SameLine();\n\n  // PARCHE LOCAL - boton de restaurar valores por defecto\n  //\n  // Va detras de una confirmacion a proposito: esta pegado al de guardar y es\n  // destructivo. Un clic de mas no puede costar media tarde de ajustes.\n  if (ImGui::Button("Restore defaults")) {\n    ImGui::OpenPopup("Restore defaults?##rex_restore");\n  }\n  ImGui::SameLine();\n  ImGui::TextDisabled("(%s)", config_path_.filename().string().c_str());\n\n  if (ImGui::BeginPopupModal("Restore defaults?##rex_restore", nullptr,\n                             ImGuiWindowFlags_AlwaysAutoResize)) {\n    ImGui::TextUnformatted("Every setting goes back to its built-in default.");\n    ImGui::Spacing();\n    ImGui::BulletText("Read-only settings are left alone: they are fixed when the\\n"\n                      "game starts, so changing them now would do nothing.");\n    ImGui::BulletText("Settings that need a restart do change, but only take\\n"\n                      "effect the next time you start the game.");\n    ImGui::BulletText("%s is NOT written. Press \\"Save to config\\"\\n"\n                      "afterwards if you want this to survive a restart.",\n                      config_path_.filename().string().c_str());\n    ImGui::Separator();\n\n    if (ImGui::Button("Restore", ImVec2(120.0f, 0))) {\n      // Los nombres se recogen ANTES de tocar nada. SetFlagByName escribe en\n      // la entrada del registro -al menos su origen- y no me apetece estar\n      // recorriendo el contenedor mientras se modifica.\n      std::vector<std::pair<std::string, std::string>> pendientes;\n      for (auto& e : registry) {\n        // Solo lectura: fijados al arrancar. Entre ellos esta el motor de\n        // video, que es justo el que no queremos perder.\n        if (e.lifecycle == rex::cvar::Lifecycle::kInitOnly) {\n          continue;\n        }\n        // Los comandos son botones, no tienen valor que restaurar.\n        if (e.type == rex::cvar::FlagType::Command) {\n          continue;\n        }\n        if (e.getter() == e.default_value) {\n          continue;\n        }\n        pendientes.emplace_back(e.name, e.default_value);\n      }\n\n      int restaurados = 0;\n      for (auto& [nombre, porDefecto] : pendientes) {\n        if (rex::cvar::SetFlagByName(nombre, porDefecto)) {\n          ++restaurados;\n        }\n      }\n      REXLOG_INFO("[ajustes] {} de {} valores devueltos a su valor por defecto", restaurados,\n                  pendientes.size());\n      ImGui::CloseCurrentPopup();\n    }\n\n    ImGui::SameLine();\n    if (ImGui::Button("Cancel", ImVec2(120.0f, 0))) {\n      ImGui::CloseCurrentPopup();\n    }\n    ImGui::EndPopup();\n  }\n'
@@ -426,16 +432,16 @@ BLOQUES = [
     ("boton de restaurar", BARRA_ANCLA, BARRA_NUEVO),
 ]
 
-# Va DESPUES de los bloques a proposito: cada entrada necesita su anclaje, y
-# los anclajes se definen arriba. La primera version de esta lista estaba antes
-# que ellos y la entrada del aviso se quedo con el anclaje a "", que funcionaba
-# de casualidad -sustituir por cadena vacia borra el bloque y deja el anclaje
-# intacto- hasta que la migracion empezo a mirar que bloque toca en cada
-# anclaje y se encontro con una clave que no existia.
+# It comes AFTER the blocks on purpose: each entry needs its anchor, and the
+# anchors are defined above. The first version of this list was placed before
+# them, and the notice entry ended up with an anchor of "", which worked by
+# accident -replacing with an empty string erases the block and leaves the
+# anchor intact- until the migration started looking up which block belongs
+# to each anchor and ran into a key that didn't exist.
 #
-# DE MAS NUEVO A MAS VIEJO. Ver quitar_version_vieja para por que importa.
+# NEWEST TO OLDEST. See quitar_version_vieja for why that matters.
 VIEJOS = [
-    # (nombre, huella para avisar, bloque entero con forma de anclaje, anclaje)
+    # (name, fingerprint to warn with, whole block shaped as an anchor, anchor)
     ("aviso de la v1 (variable compartida)",
      'g_gpu_backend_en_uso',
      '  ImGui::EndChild();\n\n' + VIEJO_AVISO_V1 + '  // Bottom bar: Save button.\n',
@@ -461,46 +467,47 @@ def localizar_sdk():
 
 
 def quitar_version_vieja(txt):
-    """Quita los restos de una version anterior de este mismo parche.
+    """Removes the leftovers of a previous version of this same patch.
 
-    EL PROBLEMA, QUE ME COSTO TRES INTENTOS
+    THE PROBLEM, WHICH TOOK ME THREE TRIES
     ---------------------------------------
-    Un bloque viejo y el de ahora pueden solaparse de dos maneras, y cada una
-    rompe la solucion obvia de la otra:
+    An old block and the current one can overlap in two ways, and each one
+    breaks the obvious solution to the other:
 
-      * EL VIEJO ES UN TROZO DEL DE AHORA (al bloque se le anadio codigo).
-        Buscar el viejo lo encuentra DENTRO del bueno, y sustituirlo por el
-        anclaje le corta la cabeza al bloque recien puesto. Luego se vuelve a
-        aplicar y queda la cola DUPLICADA. El fichero crecia cada pasada.
+      * THE OLD ONE IS A PIECE OF THE CURRENT ONE (code was added to the
+        block). Searching for the old one finds it INSIDE the good one, and
+        replacing it with the anchor cuts the head off the block that was
+        just applied. Then it gets applied again and the tail ends up
+        DUPLICATED. The file grew on every pass.
 
-      * EL DE AHORA ES UN TROZO DEL VIEJO (al bloque se le quito codigo).
-        Entonces "el bloque bueno esta" da que si aunque lo que hay siga
-        siendo el viejo entero, y el script se da por aplicado dejando dentro
-        codigo muerto.
+      * THE CURRENT ONE IS A PIECE OF THE OLD ONE (code was removed from the
+        block). Then "the good block is there" comes out true even though
+        what's actually there is still the whole old block, and the script
+        considers itself applied while leaving dead code inside.
 
-    Intente resolverlo con una HUELLA por version -un trozo que solo estuviera
-    en esa version-. No siempre existe: cuando el viejo es prefijo exacto del
-    nuevo, TODO lo que hay en el viejo esta tambien en el nuevo.
+    I tried solving it with a FINGERPRINT per version -a piece that only
+    existed in that version-. It doesn't always exist: when the old one is an
+    exact prefix of the new one, EVERYTHING in the old one is also in the new
+    one.
 
-    LA REGLA QUE SI VALE, Y NO NECESITA HUELLAS
-    -------------------------------------------
-    Encontrar el bloque viejo solo cuenta si NO puede ser el bueno visto a
-    medias:
+    THE RULE THAT ACTUALLY WORKS, AND NEEDS NO FINGERPRINTS
+    ---------------------------------------------------------
+    Finding the old block only counts if it CANNOT be the good one seen
+    halfway:
 
-        es_de_verdad_vieja = (viejo in txt) and
-                             (viejo not in nuevo or nuevo not in txt)
+        really_is_old = (old in txt) and
+                        (old not in new or new not in txt)
 
-    Los dos casos de arriba salen bien con eso, y se comprueba solo con los
-    textos, sin que yo tenga que acertar a mano con ninguna huella.
+    Both cases above come out right with that, and it's checked using only
+    the texts themselves, without me having to guess a fingerprint by hand.
 
-    VIEJOS sigue yendo DE MAS NUEVO A MAS VIEJO, y en cuanto una version
-    encaja para un anclaje las demas de ese anclaje se saltan: si la v2 es la
-    v1 con cosas anadidas, mirar la v1 primero dejaria huerfana la cola de la
-    v2. Eso tambien paso.
+    VIEJOS still goes NEWEST TO OLDEST, and as soon as one version matches for
+    an anchor the other ones for that anchor are skipped: if v2 is v1 with
+    things added, checking v1 first would orphan v2's tail. That happened too.
 
-    Y esto se prueba corriendo el parche DOS VECES seguidas sobre el fichero
-    de verdad y comparando. El fallo del duplicado no se ve en la primera
-    pasada, que es la unica que se suele mirar.
+    And this is tested by running the patch TWICE in a row on the real file
+    and comparing. The duplication bug doesn't show up on the first pass,
+    which is the only one people usually check.
     """
     ahora = {ancla: nuevo for _, ancla, nuevo in BLOQUES}
     quitados = 0
@@ -510,16 +517,16 @@ def quitar_version_vieja(txt):
             continue
         nuevo = ahora[ancla]
         if viejo not in txt:
-            # La huella solo se usa para avisar: si asoma un trozo de esa
-            # version pero el bloque entero no cuadra, alguien lo ha editado a
-            # mano y prefiero no adivinar.
+            # The fingerprint is only used to warn: if a piece of that
+            # version shows up but the whole block doesn't match, someone
+            # has edited it by hand and I'd rather not guess.
             if huella in txt and nuevo not in txt:
                 print(f"[aviso] Veo restos de '{nombre}' pero no en la forma que esperaba.")
                 print(f"        Lo dejo estar; miralo a mano si algo va raro.")
             continue
         if viejo in nuevo and nuevo in txt:
-            # No es una version vieja: es el bloque de ahora, que contiene al
-            # viejo dentro. Este anclaje ya esta al dia.
+            # This isn't an old version: it's the current block, which
+            # contains the old one inside it. This anchor is already up to date.
             anclajes_hechos.add(ancla)
             continue
         txt = txt.replace(viejo, ancla)
@@ -543,8 +550,8 @@ def main():
         print(f"  {f.name:26s} {puestos} de {len(BLOQUES)} bloques aplicados")
         for nombre, _, nuevo in BLOQUES:
             print(f"      {'si' if nuevo in txt else 'NO':>2}  {nombre}")
-        # Con la misma regla que usa la migracion, para que --estado no avise
-        # de restos que en realidad son trozos del bloque bueno.
+        # With the same rule the migration uses, so that --estado doesn't warn
+        # about leftovers that are actually pieces of the good block.
         ahora = {ancla: nuevo for _, ancla, nuevo in BLOQUES}
         viejos = sum(1 for _, _, viejo, ancla in VIEJOS
                      if viejo in txt
@@ -576,8 +583,9 @@ def main():
 
     txt, _ = quitar_version_vieja(txt)
 
-    # Bloque a bloque: los que ya estan se dejan, los que faltan se aplican.
-    # Asi, anadir un bloque nuevo mas adelante no obliga a deshacer lo puesto.
+    # Block by block: the ones already in place are left alone, the missing
+    # ones get applied. This way, adding a new block later doesn't require
+    # undoing what's already there.
     faltan = [(n, a, v) for n, a, v in BLOQUES if v not in txt]
     if not faltan:
         print(f"[ok] {f.name}: los {len(BLOQUES)} bloques ya estaban")

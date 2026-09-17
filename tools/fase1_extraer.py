@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-NFSMW Recomp - Fase 1: extraer el ISO de Xbox 360 y volcar la info del XEX.
+NFSMW Recomp - Phase 1: extract the Xbox 360 ISO and dump the XEX info.
 
-Sin dependencias: solo Python 3.8+ de la biblioteca estandar.
+No dependencies: only Python 3.8+ standard library.
 
-Uso tipico:
+Typical usage:
     python tools/fase1_extraer.py "D:\\dumps\\NFSMW.iso" --listar
     python tools/fase1_extraer.py "D:\\dumps\\NFSMW.iso" -o assets/game_root
     python tools/fase1_extraer.py assets/game_root/default.xex --info
 
-Que hace:
-  1. Detecta el offset de la particion de juego (XGD1 / XGD2 / XGD3 / cruda).
-  2. Recorre el arbol XDVDFS y lista o extrae los archivos.
-  3. Parsea la cabecera XEX2 del default.xex y saca title id, base address,
-     entry point y el tipo de compresion/cifrado.
+What it does:
+  1. Detects the offset of the game partition (XGD1 / XGD2 / XGD3 / raw).
+  2. Walks the XDVDFS tree and lists or extracts the files.
+  3. Parses the XEX2 header of default.xex and pulls out the title id, base
+     address, entry point, and the compression/encryption type.
 
-NO desencripta ni descomprime el PE: de eso se encarga ReXGlue internamente
-durante el codegen. Aqui solo necesitamos los archivos y los datos de cabecera.
+It does NOT decrypt or decompress the PE: ReXGlue handles that internally
+during codegen. Here we only need the files and the header data.
 """
 
 import argparse
@@ -28,7 +28,7 @@ import sys
 SECTOR = 2048
 XDVDFS_MAGIC = b"MICROSOFT*XBOX*MEDIA"
 
-# Offsets conocidos donde empieza la particion de juego, segun el tipo de disco.
+# Known offsets where the game partition starts, depending on the disc type.
 KNOWN_BASES = [
     (0x00000000, "particion cruda / imagen ya recortada"),
     (0x0FD90000, "XGD2 (la mayoria de juegos de 360)"),
@@ -44,7 +44,7 @@ ATTR_DIRECTORY = 0x10
 # ---------------------------------------------------------------------------
 
 def _magic_at(fh, offset):
-    """True si el descriptor de volumen esta en base=offset."""
+    """True if the volume descriptor is at base=offset."""
     try:
         fh.seek(offset + 32 * SECTOR)
     except OSError:
@@ -54,12 +54,12 @@ def _magic_at(fh, offset):
 
 
 def detectar_base(fh, limite_scan=1 << 30):
-    """Devuelve (base, descripcion) de la particion de juego."""
+    """Returns (base, description) of the game partition."""
     for base, desc in KNOWN_BASES:
         if _magic_at(fh, base):
             return base, desc
 
-    # Ninguno de los conocidos: barrido por fuerza bruta en trozos grandes.
+    # None of the known ones: brute-force scan in large chunks.
     fh.seek(0, os.SEEK_END)
     tam = fh.tell()
     tope = min(tam, limite_scan)
@@ -88,7 +88,7 @@ def detectar_base(fh, limite_scan=1 << 30):
 
 
 def leer_descriptor(fh, base):
-    """Devuelve (sector_raiz, tam_raiz) leyendo el volume descriptor."""
+    """Returns (sector_raiz, tam_raiz) by reading the volume descriptor."""
     fh.seek(base + 32 * SECTOR)
     vd = fh.read(SECTOR)
     if len(vd) < SECTOR or vd[:20] != XDVDFS_MAGIC:
@@ -101,13 +101,13 @@ def leer_descriptor(fh, base):
 
 
 def _entradas(tabla, offset, vistos):
-    """Recorre el arbol binario de un directorio. Genera dicts por entrada."""
+    """Walks the binary tree of a directory. Yields dicts per entry."""
     pila = [offset]
     while pila:
         off = pila.pop()
         if off in vistos:
             continue
-        # Un offset de 0 solo es valido para la raiz del arbol.
+        # An offset of 0 is only valid for the root of the tree.
         if off != 0 and off == 0:
             continue
         if off + 14 > len(tabla):
@@ -117,7 +117,7 @@ def _entradas(tabla, offset, vistos):
         izq, der, sector, tam, attrs, largo = struct.unpack_from(
             "<HHIIBB", tabla, off)
 
-        # 0xFFFF y 0 marcan "sin hijo".
+        # 0xFFFF and 0 mark "no child".
         for hijo in (izq, der):
             if hijo not in (0, 0xFFFF):
                 pila.append(hijo * 4)
@@ -136,7 +136,7 @@ def _entradas(tabla, offset, vistos):
 
 
 def recorrer(fh, base, sector, tam, prefijo=""):
-    """Recorre recursivamente el arbol de directorios. Genera (ruta, entrada)."""
+    """Recursively walks the directory tree. Yields (path, entry)."""
     if tam == 0 or tam > (256 << 20):
         return
     fh.seek(base + sector * SECTOR)
@@ -237,7 +237,7 @@ def info_xex(ruta):
         print("  offset security info  : 0x%08X" % off_seguridad)
         print("  cabeceras opcionales  : %d" % n_opt)
 
-        # Las cabeceras opcionales pueden pasar de los 0x1000 leidos.
+        # The optional headers can extend past the 0x1000 bytes read.
         fh.seek(0x18)
         raw_opt = fh.read(n_opt * 8)
         opcionales = {}
@@ -251,7 +251,7 @@ def info_xex(ruta):
         print()
         print("== Datos clave ==")
 
-        # Execution info -> title id, version, disco
+        # Execution info -> title id, version, disc
         title_id = None
         if 0x00040006 in opcionales:
             fh.seek(opcionales[0x00040006])
@@ -284,7 +284,7 @@ def info_xex(ruta):
             print("  Load address          : 0x%08X" % load_addr)
             print("  Tamano de imagen      : %s bytes" % f"{tam_imagen:,}")
 
-        # File format info -> compresion / cifrado
+        # File format info -> compression / encryption
         if 0x000003FF in opcionales:
             fh.seek(opcionales[0x000003FF])
             ffi = fh.read(8)
@@ -295,7 +295,7 @@ def info_xex(ruta):
                 print("  Compresion            : %s (%d)"
                       % (COMPRESION.get(comp, "desconocida"), comp))
 
-        # Otros campos utiles que van inline
+        # Other useful fields that come inline
         if 0x00010001 in opcionales:
             print("  Original base address : 0x%08X" % opcionales[0x00010001])
         if 0x00020200 in opcionales:
@@ -303,9 +303,9 @@ def info_xex(ruta):
         if 0x00030000 in opcionales:
             print("  System flags          : 0x%08X" % opcionales[0x00030000])
 
-        # Import libraries: que modulos del kernel usa el juego.
-        # Esto marca el trabajo de la fase 3: cada modulo trae imports que hay
-        # que implementar o stubear en el runtime.
+        # Import libraries: which kernel modules the game uses.
+        # This marks the work for phase 3: each module brings imports that
+        # need to be implemented or stubbed in the runtime.
         if 0x000103FF in opcionales:
             try:
                 fh.seek(opcionales[0x000103FF])
@@ -348,7 +348,7 @@ def info_xex(ruta):
 # ---------------------------------------------------------------------------
 
 def buscar_iso():
-    """Busca un unico .iso en la carpeta del proyecto (o en la actual)."""
+    """Looks for a single .iso in the project folder (or the current one)."""
     raiz = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidatos = []
     for carpeta in (raiz, os.getcwd()):

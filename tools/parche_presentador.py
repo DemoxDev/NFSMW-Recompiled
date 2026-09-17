@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
 """
-Hace que VSYNC y el LIMITE DE FPS existan de verdad.
+Makes VSYNC and the FPS LIMIT actually exist.
 
     python tools/parche_presentador.py            aplicar
     python tools/parche_presentador.py --estado
     python tools/parche_presentador.py --revertir
 
-Toca un solo fichero del SDK:  src/ui/d3d12/d3d12_presenter.cpp
-Guarda un .original la primera vez y es idempotente.
+Touches a single SDK file:  src/ui/d3d12/d3d12_presenter.cpp
+Saves a .original the first time and is idempotent.
 
 
-POR QUE HACIA FALTA ESTO
+WHY THIS WAS NEEDED
 ========================
 
 VSYNC
 -----
-El cvar "vsync" existe, pero NO es vsync. Se lee en un unico sitio de todo el
-SDK, en command_processor.cpp, dentro de ExecutePacketType3_WAIT_REG_MEM:
+The "vsync" cvar exists, but it's NOT vsync. It's read in exactly one place
+in the whole SDK, in command_processor.cpp, inside
+ExecutePacketType3_WAIT_REG_MEM:
 
     if (!REXCVAR_GET(vsync)) {
       // User wants it fast and dangerous.
@@ -25,45 +26,48 @@ SDK, en command_processor.cpp, dentro de ExecutePacketType3_WAIT_REG_MEM:
       rex::thread::Sleep(std::chrono::milliseconds(wait / 0x100));
     }
 
-O sea: decide si el procesador de comandos DUERME cuando el flujo de comandos
-del juego pide esperar, o si se queda girando. Es un "corre a lo loco", no una
-sincronizacion con la pantalla.
+In other words: it decides whether the command processor SLEEPS when the
+game's command stream asks it to wait, or whether it just keeps spinning.
+That's a "run wild" switch, not a sync with the display.
 
-La sincronizacion de verdad esta en el presentador de D3D12, y estaba clavada:
+The real synchronization lives in the D3D12 presenter, and it was hardcoded:
 
     swap_chain->Present(0, DXGI_PRESENT_RESTART | ...);
 
-Ese primer 0 es el SyncInterval. Con 0 se presenta siempre en cuanto se puede,
-pase lo que pase con el cvar. El comentario del SDK explica por que se eligio
-asi -el monitor puede ir a 144 Hz, que no es multiplo de los 30 o 60 del
-guest-, pero el efecto es que la casilla de vsync no hacia nada visible.
+That first 0 is the SyncInterval. With 0, it presents as soon as it possibly
+can, no matter what the cvar says. The SDK's comment explains why it was
+chosen that way -the monitor may run at 144 Hz, which isn't a multiple of
+the guest's 30 or 60-, but the effect is that the vsync checkbox did nothing
+visible.
 
-El parche pasa SyncInterval 1 cuando vsync esta activado.
+The patch passes SyncInterval 1 when vsync is enabled.
 
-  DETALLE QUE IMPORTA: con SyncInterval distinto de 0, DXGI RECHAZA la bandera
-  ALLOW_TEARING y devuelve DXGI_ERROR_INVALID_CALL. Son excluyentes. Y
-  DXGI_PRESENT_RESTART descarta fotogramas encolados, que es justo lo contrario
-  de lo que se quiere con vsync. Por eso con vsync activado no se pasa ninguna
-  de las dos, y sin vsync se deja todo exactamente como estaba.
+  DETAIL THAT MATTERS: with a SyncInterval other than 0, DXGI REJECTS the
+  ALLOW_TEARING flag and returns DXGI_ERROR_INVALID_CALL. They're mutually
+  exclusive. And DXGI_PRESENT_RESTART drops queued frames, which is exactly
+  the opposite of what you want with vsync. That's why with vsync enabled
+  neither flag is passed, and without vsync everything is left exactly as it
+  was.
 
-  El cvar se lee por NOMBRE, con rex::cvar::Query<bool>("vsync"), no con
-  REXCVAR_GET. Es a proposito: "vsync" se define en el plugin de GPU
-  (rexgpu-xenos.dll) y el presentador vive en rexruntime.dll. Enlazar contra un
-  simbolo del plugin no funcionaria; el registro de cvars, en cambio, es comun
-  y la busqueda por nombre lo atraviesa sin problema. Se comprueba antes con
-  GetFlagInfo por si el plugin no estuviera cargado.
+  The cvar is read by NAME, with rex::cvar::Query<bool>("vsync"), instead of
+  REXCVAR_GET. That's deliberate: "vsync" is defined in the GPU plugin
+  (rexgpu-xenos.dll) and the presenter lives in rexruntime.dll. Linking
+  against a symbol from the plugin wouldn't work; the cvar registry, on the
+  other hand, is shared, and looking it up by name goes right through it. It's
+  checked first with GetFlagInfo in case the plugin isn't loaded.
 
-LIMITE DE FPS
+FPS LIMIT
 -------------
-No existia ninguno. Se busco en todas las cabeceras y en los simbolos de los
-DLL compilados: solo hay "vsync". Asi que se anade un cvar nuevo, max_fps,
-definido aqui mismo en el presentador.
+There wasn't one at all. All the headers and the symbols in the compiled
+DLLs were searched: only "vsync" turns up. So a new cvar, max_fps, is added,
+defined right here in the presenter.
 
-  0 = sin limite (el comportamiento de siempre).
+  0 = no limit (the same behavior as before).
 
-Duerme hasta que toque el siguiente fotograma. No duerme del todo: deja el
-ultimo tramo girando, porque Sleep en Windows tiene una granularidad de entre
-1 y 15 ms y sin ese remate el limite se queda corto y con tirones.
+It sleeps until the next frame is due. It doesn't sleep the whole way: it
+leaves the last stretch spinning, because Sleep on Windows has a granularity
+of between 1 and 15 ms, and without that final spin the limit falls short
+and gets choppy.
 """
 
 import argparse
@@ -74,7 +78,7 @@ import sys
 MARCA = "PARCHE LOCAL - vsync real y limitador de fps"
 
 # ---------------------------------------------------------------------------
-#  El sitio exacto, copiado tal cual del fuente del SDK.
+#  The exact spot, copied verbatim from the SDK source.
 # ---------------------------------------------------------------------------
 ANCLA = """  HRESULT present_result = paint_context_.swap_chain->Present(
       0, DXGI_PRESENT_RESTART |
@@ -140,7 +144,7 @@ NUEVO = """  // ----------------------------------------------------------------
   HRESULT present_result = paint_context_.swap_chain->Present(sync_interval, present_flags);
 """
 
-# El cvar nuevo y las cabeceras que necesita el codigo de arriba.
+# The new cvar and the headers the code above needs.
 ANCLA_CVAR = """REXCVAR_DEFINE_BOOL(d3d12_allow_variable_refresh_rate_and_tearing, true, "UI/D3D12",
                     "Allow variable refresh rate and tearing");
 """
@@ -211,8 +215,8 @@ def main():
         print("[ok] Ya estaba aplicado. No toco nada.")
         return 0
 
-    # Comprobar los tres anclajes ANTES de escribir nada. Si el SDK cambia de
-    # version y alguno no cuadra, mejor no dejar el fichero a medias.
+    # Check all three anchors BEFORE writing anything. If the SDK changes
+    # version and one of them doesn't match, better not leave the file half-done.
     for nombre, ancla in [("includes", ANCLA_INC),
                           ("definicion de cvars", ANCLA_CVAR),
                           ("llamada a Present", ANCLA)]:
