@@ -860,3 +860,7 @@
 "0x824B1668" = { }
 "0x824B1688" = { }
 "0x824B16A8" = { }
+
+# --- 0x8211A420-0x8211A430: two 8-byte getters (lwz r3,116(r3); blr) back to back.
+# The second one crashed mid-Bull race when the cop cars loaded.
+"0x8211A428" = { }
