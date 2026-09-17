@@ -8,17 +8,28 @@
 #include <rex/filesystem.h>
 #include <rex/logging.h>
 #include <rex/rex_app.h>
+#include <rex/ui/imgui_dialog.h>  // PERF OVERLAY (--perf_overlay)
 #include <rex/ui/overlay/debug_overlay.h>
 #include <rex/ui/presenter.h>  // FPS COUNTER - game frames
 #include <rex/system/kernel_state.h>  // HANG WATCHDOG
 #include <rex/system/xthread.h>       // HANG WATCHDOG
+
+#include <imgui.h>  // PERF OVERLAY
+
+REXCVAR_DEFINE_BOOL(perf_overlay, false, "UI",
+                    "MangoHud-style performance overlay in the top-left corner: guest FPS, "
+                    "frame time, process CPU and memory. Updates once per second.");
 
 #include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <map>  // HANG WATCHDOG - the signature is ordered by thread id
+#include <cstdio>   // PERF OVERLAY - /proc/self/stat
 #include <cstdlib>
+#ifdef __linux__
+#include <unistd.h>  // PERF OVERLAY - sysconf
+#endif
 #include <memory>
 #include <string>
 #include <thread>
@@ -181,6 +192,62 @@ class NfsmwApp : public rex::ReXApp {
   }
 
   void OnShutdown() override { PararVigilante(); }
+
+  // ==========================================================================
+  //  PERFORMANCE OVERLAY (--perf_overlay)
+  //
+  //  A passive HUD in the top-left corner, MangoHud style. The numbers are
+  //  the watchdog's: it already measures guest fps once per second, and now
+  //  also process CPU and RSS in the same tick. The dialog only READS them.
+  //
+  //  It repaints continuously like any other dialog (the F3 overlay path,
+  //  proven for years). An attempt to repaint only per guest frame froze
+  //  the game: with no continuous pump, the guest-refresh paint request
+  //  runs on the GPU thread under paint_mode_mutex_ and deadlocks against
+  //  the UI thread. The pump is also self-throttled by the presenter's UI
+  //  tick, so the cost is bounded anyway.
+  //
+  //  Side effect worth knowing: with any dialog registered the presenter
+  //  paints from the UI thread instead of inline on the GPU command
+  //  processor thread. That path is fine (it's the same one every overlay
+  //  uses), it's just a different code path than overlay-off.
+  // ==========================================================================
+  class HudRendimiento : public rex::ui::ImGuiDialog {
+   public:
+    HudRendimiento(rex::ui::ImGuiDrawer* drawer, NfsmwApp* app)
+        : rex::ui::ImGuiDialog(drawer), app_(app) {}
+
+   protected:
+    void OnDraw(ImGuiIO& io) override {
+      (void)io;
+      ImGui::SetNextWindowPos(ImVec2(8.0f, 8.0f), ImGuiCond_Always);
+      ImGui::SetNextWindowBgAlpha(0.45f);
+      ImGui::Begin("##perf_overlay", nullptr,
+                   ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize |
+                       ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
+                       ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs |
+                       ImGuiWindowFlags_NoMove);
+      const float fps = app_->hud_fps_.load(std::memory_order_relaxed);
+      const float ms = app_->hud_ms_.load(std::memory_order_relaxed);
+      const float cpu = app_->hud_cpu_pct_.load(std::memory_order_relaxed);
+      const float ram = app_->hud_ram_mb_.load(std::memory_order_relaxed);
+      ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "FPS %5.1f", fps);
+      ImGui::Text("Frame %5.1f ms", ms);
+      ImGui::Text("CPU   %5.0f %%", cpu);
+      ImGui::Text("RAM   %5.0f MB", ram);
+      ImGui::End();
+    }
+
+   private:
+    NfsmwApp* app_;
+  };
+
+  void OnCreateDialogs(rex::ui::ImGuiDrawer* drawer) override {
+    if (REXCVAR_GET(perf_overlay)) {
+      // Dialogs retain themselves; this one lives until shutdown.
+      new HudRendimiento(drawer, this);
+    }
+  }
 
  private:
   static void PonerSiNadieLoPidio(const char* nombre, const char* valor) {
@@ -507,6 +574,39 @@ class NfsmwApp : public rex::ReXApp {
                     s.frame_count);
       }
 
+      // PERF OVERLAY - same tick feeds the HUD. CPU is the whole process as
+      // top shows it (200% = two cores); RAM is resident set.
+      hud_fps_.store(float(s.fps), std::memory_order_relaxed);
+      hud_ms_.store(float(s.frame_time_ms), std::memory_order_relaxed);
+#ifdef __linux__
+      {
+        if (FILE* f = std::fopen("/proc/self/stat", "r")) {
+          long utime = 0, stime = 0;
+          // Everything up to the closing paren of comm, then fields 3..15.
+          if (std::fscanf(f,
+                          "%*d (%*[^)]) %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %ld %ld",
+                          &utime, &stime) == 2) {
+            const double total = double(utime + stime) / double(sysconf(_SC_CLK_TCK));
+            if (hud_cpu_previa_ > 0.0 && dt_s > 0.0) {
+              hud_cpu_pct_.store(float(100.0 * (total - hud_cpu_previa_) / dt_s),
+                                 std::memory_order_relaxed);
+            }
+            hud_cpu_previa_ = total;
+          }
+          std::fclose(f);
+        }
+        if (FILE* f = std::fopen("/proc/self/statm", "r")) {
+          long paginas_total = 0, paginas_rss = 0;
+          if (std::fscanf(f, "%ld %ld", &paginas_total, &paginas_rss) == 2) {
+            hud_ram_mb_.store(float(double(paginas_rss) * double(sysconf(_SC_PAGESIZE)) /
+                                    (1024.0 * 1024.0)),
+                              std::memory_order_relaxed);
+          }
+          std::fclose(f);
+        }
+      }
+#endif
+
       auto* kernel = rex::system::kernel_state();
       if (!kernel) continue;
 
@@ -592,6 +692,14 @@ class NfsmwApp : public rex::ReXApp {
 
   // Only touched by the watchdog thread, which is the only one measuring.
   rex::ui::FrameStats stats_{};
+
+  // PERF OVERLAY - written by the watchdog tick, read by HudRendimiento on
+  // the UI thread.
+  std::atomic<float> hud_fps_{0.0f};
+  std::atomic<float> hud_ms_{0.0f};
+  std::atomic<float> hud_cpu_pct_{0.0f};
+  std::atomic<float> hud_ram_mb_{0.0f};
+  double hud_cpu_previa_ = 0.0;  // watchdog thread only
   uint64_t fotogramas_previos_ = 0;
   int desde_log_fps_ = 0;
 

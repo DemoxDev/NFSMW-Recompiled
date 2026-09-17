@@ -15,12 +15,16 @@ SAVES=${SAVES:-$PWD/saves}          # keep everything next to the game by defaul
 SCALE=${SCALE:-2}                   # 2 = 2560x1440 internal; measured same fps as 1
 FULLSCREEN=${FULLSCREEN:-true}
 VSYNC=${VSYNC:-true}
+OVERLAY=${OVERLAY:-false}           # OVERLAY=1 shows the top-left perf HUD
 
 mkdir -p "$SAVES"
+
+case "$OVERLAY" in 1|true|yes) OVERLAY=true;; *) OVERLAY=false;; esac
 
 exec ./nfsmw \
     --user_data_root="$SAVES" \
     --resolution_scale="$SCALE" \
     --fullscreen="$FULLSCREEN" \
     --vsync="$VSYNC" \
+    --perf_overlay="$OVERLAY" \
     "$@"
