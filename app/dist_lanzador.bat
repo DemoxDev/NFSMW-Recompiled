@@ -3,14 +3,14 @@ setlocal
 cd /d "%~dp0"
 
 rem ===========================================================================
-rem  LANZADOR - la forma normal de jugar.
+rem  LAUNCHER - the normal way to play.
 rem
-rem  Abre una ventana donde elegir resolucion, pantalla completa o ventana,
-rem  la ISO, vsync y limite de fps. Recuerda lo que elijas para la proxima vez.
+rem  Opens a window to choose resolution, fullscreen or windowed, the ISO,
+rem  vsync, and fps limit. Remembers your choices for next time.
 rem
-rem  Si prefieres jugar sin mas, tambien puedes abrir nfsmw.exe
-rem  directamente: cogera la ISO que encuentre en esta carpeta y los ajustes
-rem  de nfsmw.toml.
+rem  If you'd rather just play, you can also open nfsmw.exe directly: it
+rem  will pick up whichever ISO it finds in this folder and the settings
+rem  from nfsmw.toml.
 rem ===========================================================================
 
 if not exist "%~dp0lanzador.ps1" (
@@ -21,9 +21,9 @@ if not exist "%~dp0lanzador.ps1" (
     exit /b 1
 )
 
-rem  El juego es nfsmw.exe: en build\ el nombre NFS_Most_Wanted.exe lo lleva
-rem  EL LANZADOR, para que el icono del juego abra la ventana de opciones. Se
-rem  acepta el nombre viejo detras, para carpetas de antes del cambio.
+rem  The game is nfsmw.exe: in build\ the name NFS_Most_Wanted.exe belongs to
+rem  THE LAUNCHER, so the game's icon opens the options window. The old name
+rem  is still accepted as a fallback, for folders from before the change.
 set "JUEGO=%~dp0nfsmw.exe"
 if not exist "%JUEGO%" set "JUEGO=%~dp0NFS_Most_Wanted.exe"
 if not exist "%JUEGO%" (

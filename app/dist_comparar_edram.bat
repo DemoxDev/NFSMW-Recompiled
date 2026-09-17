@@ -3,35 +3,35 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 rem ===========================================================================
-rem  COMPARAR LOS DOS MOTORES DE VIDEO
+rem  COMPARE THE TWO VIDEO ENGINES
 rem
-rem  Va en la misma carpeta que el juego. Doble clic y ya.
+rem  Goes in the same folder as the game. Double-click and done.
 rem
-rem  PARA QUE SIRVE
-rem  Estamos persiguiendo un fallo visual y hace falta saber si le pasa a todo
-rem  el mundo o solo a una tarjeta concreta. Este .bat lanza el juego de dos
-rem  formas distintas para poder compararlas.
+rem  WHAT IT'S FOR
+rem  We're chasing a visual glitch and need to know if it happens to
+rem  everyone or only to one specific card. This .bat launches the game two
+rem  different ways so they can be compared.
 rem
-rem  QUE HAY QUE MIRAR
-rem  Una FRANJA HORIZONTAL que cruza la pantalla. Por debajo de ella la
-rem  carretera y el suelo se ven mas iluminados, en amarillo; por encima, mas
-rem  apagados. El borde es recto y se queda siempre a la misma altura de la
-rem  pantalla, no se mueve con el paisaje.
+rem  WHAT TO LOOK FOR
+rem  A HORIZONTAL BAND crossing the screen. Below it the road and ground
+rem  look brighter, yellowish; above it, dimmer. The edge is straight and
+rem  always stays at the same height on the screen, it doesn't move with the
+rem  scenery.
 rem
-rem  Se ve mejor conduciendo por una carretera abierta y de dia.
+rem  Easiest to spot driving on an open road in daylight.
 rem
-rem  QUE CONTESTAR
-rem  Solo dos cosas por cada opcion:
-rem     1. si esa franja se ve o no
-rem     2. los fps que marca F3
+rem  WHAT TO ANSWER
+rem  Just two things per option:
+rem     1. whether that band is visible or not
+rem     2. the fps shown by F3
 rem
-rem  Eso es todo. Con esos cuatro datos sabemos si el fallo es del juego o de
-rem  una tarjeta grafica concreta.
+rem  That's it. With those four data points we can tell if the bug is in the
+rem  game or in one specific graphics card.
 rem ===========================================================================
 
-rem  El juego es nfsmw.exe: en build\ el nombre NFS_Most_Wanted.exe lo lleva
-rem  EL LANZADOR, para que el icono del juego abra la ventana de opciones. Se
-rem  acepta el nombre viejo detras, para carpetas de antes del cambio.
+rem  The game is nfsmw.exe: in build\ the name NFS_Most_Wanted.exe belongs to
+rem  THE LAUNCHER, so the game's icon opens the options window. The old name
+rem  is still accepted as a fallback, for folders from before the change.
 set "JUEGO=%~dp0nfsmw.exe"
 if not exist "%JUEGO%" set "JUEGO=%~dp0NFS_Most_Wanted.exe"
 if not exist "%JUEGO%" (

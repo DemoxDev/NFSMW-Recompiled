@@ -3,18 +3,19 @@ setlocal
 cd /d "%~dp0"
 
 rem ===========================================================================
-rem  PRUEBA DE ARRANQUE - para quien ve que el juego no le arranca.
+rem  STARTUP TEST - for anyone whose game won't start.
 rem
-rem  Va en la misma carpeta que el juego. Doble clic y ya.
+rem  Goes in the same folder as the game. Double-click and done.
 rem
-rem  QUE HACE
-rem  Lanza el juego 20 veces: 5 por cada una de 4 configuraciones distintas de
-rem  planificacion de hilos. Cada intento arranca con la cache de shaders
-rem  VACIA, que es lo que destapa el fallo.
+rem  WHAT IT DOES
+rem  Launches the game 20 times: 5 for each of 4 different thread scheduling
+rem  configurations. Each attempt starts with an EMPTY shader cache, which is
+rem  what exposes the bug.
 rem
-rem  Se abriran y cerraran ventanas solas. Es normal. Tarda unos 8 minutos.
+rem  Windows will open and close on their own. That's normal. Takes about 8
+rem  minutes.
 rem
-rem  Al final imprime una tabla. ESA TABLA ES LO QUE HAY QUE MANDAR.
+rem  At the end it prints a table. THAT TABLE IS WHAT NEEDS TO BE SENT.
 rem ===========================================================================
 
 if not exist "%~dp0matriz.ps1" (
@@ -25,9 +26,9 @@ if not exist "%~dp0matriz.ps1" (
     exit /b 1
 )
 
-rem  El juego es nfsmw.exe: en build\ el nombre NFS_Most_Wanted.exe lo lleva
-rem  EL LANZADOR, para que el icono del juego abra la ventana de opciones. Se
-rem  acepta el nombre viejo detras, para carpetas de antes del cambio.
+rem  The game is nfsmw.exe: in build\ the name NFS_Most_Wanted.exe belongs to
+rem  THE LAUNCHER, so the game's icon opens the options window. The old name
+rem  is still accepted as a fallback, for folders from before the change.
 set "JUEGO=%~dp0nfsmw.exe"
 if not exist "%JUEGO%" set "JUEGO=%~dp0NFS_Most_Wanted.exe"
 if not exist "%JUEGO%" (

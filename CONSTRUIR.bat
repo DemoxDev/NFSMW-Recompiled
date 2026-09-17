@@ -3,93 +3,99 @@ setlocal enabledelayedexpansion
 cd /d "%~dp0"
 
 rem ===========================================================================
-rem  Genera la carpeta portable  build\  y comprueba que sea autonoma.
+rem  Builds the portable  build\  folder and checks that it's self-contained.
 rem
-rem  AHORA EMPIEZA POR LOS ARREGLOS, Y NO ES ADORNO
+rem  IT NOW STARTS WITH THE FIXES, AND THAT'S NOT DECORATION
 rem
-rem  Los arreglos del juego no viven en el codigo de la app: viven en el SDK,
-rem  aplicados por los scripts de tools\ sobre sus fuentes. O sea que acaban
-rem  dentro de rexruntime.dll, no del .exe.
+rem  The game's fixes don't live in the app's code: they live in the SDK,
+rem  applied by the scripts in tools\ over its sources. So they end up
+rem  inside rexruntime.dll, not the .exe.
 rem
-rem  Antes esto compilaba solo la app y copiaba lo que hubiera. Si el SDK
-rem  estaba sin parchear -recien clonado, revertido a mano, o de otra rama-,
-rem  build\ salia con un rexruntime.dll SIN los arreglos y con la misma pinta
-rem  que uno bueno. Ese fallo no se ve hasta que el juego se cuelga en casa de
-rem  otro, que es el peor sitio para enterarse.
+rem  Before, this only compiled the app and copied whatever was there. If the
+rem  SDK was unpatched -freshly cloned, reverted by hand, or from another
+rem  branch-, build\ came out with a rexruntime.dll WITHOUT the fixes and
+rem  looking just like a good one. You don't notice that failure until the
+rem  game hangs at someone else's place, which is the worst place to find out.
 rem
-rem  Asi que ahora se aplican los parches -son idempotentes: si ya estan, lo
-rem  dicen y no tocan nada- y se recompila el SDK antes de armar la carpeta.
-rem  Si todo estaba al dia, esa fase tarda segundos.
+rem  So now the patches get applied -they're idempotent: if they're already
+rem  there, they say so and touch nothing- and the SDK gets recompiled before
+rem  assembling the folder. If everything was already up to date, that phase
+rem  takes seconds.
 rem
-rem  QUE ARREGLOS VAN DENTRO
-rem    tools\parche_desatasco.py    EL DEL AUDIO Y EL CUELGUE. Cuando el hilo
-rem                                 de audio del juego lleva mas de un cuarto
-rem                                 de segundo girando sobre una voz que se
-rem                                 quedo sin datos, se le da la senal de
-rem                                 "buffer terminado" que su propio codigo
-rem                                 sabe leer, y sigue.
-rem    tools\parche_diagnostico.py  el aviso "Too few processor cores" salia
-rem                                 mil veces por segundo y ahogaba la CPU en
-rem                                 equipos de pocos nucleos. Ahora sale una
-rem                                 vez. Ademas, si algo revienta, el log dice
-rem                                 en que hilo del juego y con que registros.
-rem    tools\parche_gpu_fallback.py si no hay grafica con Direct3D 12 nivel
-rem                                 11_0, intenta WARP antes de rendirse; y si
-rem                                 tampoco, sale un cuadro de dialogo en vez
-rem                                 de no hacer nada al abrir.
-rem    tools\parche_restaurar.py    mejoras del menu de ajustes (F4): un boton
-rem                                 "Restore defaults" y deslizadores para los
-rem                                 ajustes decimales con limites. No arreglan
-rem                                 nada, pero probando cvars de rendimiento se
-rem                                 tocan seis o siete y luego no hay forma de
-rem                                 volver al punto de partida sin reiniciar.
-rem    tools\parche_velocidad.py    un ajuste game_speed que multiplica la
-rem                                 velocidad a la que pasa el tiempo dentro del
-rem                                 juego, movible en marcha desde F4. No es un
-rem                                 limite de fps: los fps son cuantas veces se
-rem                                 dibuja, esto es a que ritmo avanza el juego.
-rem    tools\parche_backend.py      un ajuste gpu_backend para elegir la API
-rem                                 grafica: d3d12 o vulkan. El plugin ya sabia
-rem                                 elegir; lo que faltaba era que alguien se lo
-rem                                 dijera. Pide reiniciar para que valga.
-rem                                 DX11 no esta en la lista porque este SDK no
-rem                                 tiene backend de DX11, ni lo tuvo: la
-rem                                 emulacion de la Xenos usa cosas de la
-rem                                 generacion de DX12 -ROV, descriptores sin
-rem                                 limite, escrituras tipadas desde shaders-.
-rem    tools\parche_anillo.py       instrumentacion del XMA. No cambia el
-rem                                 comportamiento y con el log normal no
-rem                                 imprime nada, pero es lo que puso nombre y
-rem                                 hora al cuelgue, y lo que hara falta si
-rem                                 vuelve. Ademas el desatasco se apoya en
-rem                                 sus cabeceras, asi que va por delante.
+rem  WHICH FIXES GO IN
+rem    tools\parche_desatasco.py    THE AUDIO/HANG ONE. When the game's audio
+rem                                 thread has spent more than a quarter
+rem                                 second spinning on a voice that ran out
+rem                                 of data, it's given the "buffer finished"
+rem                                 signal that its own code knows how to
+rem                                 read, and it moves on.
+rem    tools\parche_diagnostico.py  the "Too few processor cores" warning was
+rem                                 printing a thousand times a second and
+rem                                 choking the CPU on low-core machines. Now
+rem                                 it prints once. Also, if something
+rem                                 crashes, the log says which game thread
+rem                                 and with what registers.
+rem    tools\parche_gpu_fallback.py if there's no GPU with Direct3D 12 level
+rem                                 11_0, it tries WARP before giving up; and
+rem                                 if that fails too, it shows a dialog box
+rem                                 instead of doing nothing on launch.
+rem    tools\parche_restaurar.py    improvements to the settings menu (F4): a
+rem                                 "Restore defaults" button and sliders for
+rem                                 decimal settings with limits. It doesn't
+rem                                 fix anything, but when trying out
+rem                                 performance cvars you end up touching six
+rem                                 or seven and then have no way back to the
+rem                                 starting point without restarting.
+rem    tools\parche_velocidad.py    a game_speed setting that multiplies how
+rem                                 fast time passes inside the game,
+rem                                 adjustable on the fly from F4. It's not an
+rem                                 fps cap: fps is how many times it draws,
+rem                                 this is how fast the game progresses.
+rem    tools\parche_backend.py      a gpu_backend setting to choose the
+rem                                 graphics API: d3d12 or vulkan. The plugin
+rem                                 already knew how to choose; what was
+rem                                 missing was someone telling it to. Needs a
+rem                                 restart to take effect.
+rem                                 DX11 isn't in the list because this SDK
+rem                                 has no DX11 backend, and never did: the
+rem                                 Xenos emulation uses DX12-generation
+rem                                 features -ROV, unbounded descriptors,
+rem                                 typed writes from shaders-.
+rem    tools\parche_anillo.py       XMA instrumentation. Doesn't change
+rem                                 behavior and prints nothing with normal
+rem                                 logging, but it's what put a name and a
+rem                                 time on the hang, and what will be needed
+rem                                 if it comes back. Also the unstick fix
+rem                                 relies on its headers, so it goes first.
 rem
-rem  QUE VA A build\
-rem    NFS_Most_Wanted.exe        EL LANZADOR, con el icono del juego. Es lo
-rem                               que hay que abrir: saca la ventana de
-rem                               opciones y desde ahi se juega.
-rem    nfsmw.exe                  el juego de verdad. Se llamaba
-rem                               NFS_Most_Wanted.exe hasta que el lanzador le
-rem                               quito el nombre. Abrirlo a pelo funciona
-rem                               igual que siempre: se busca la ISO al lado.
-rem    rexruntime.dll             runtime del SDK: aqui viven los arreglos
-rem    rexgpu-xenos.dll           emulacion de la GPU. Se carga con LoadLibrary
-rem                               segun el cvar gpu_plugin, asi que NO aparece
-rem                               en las dependencias del enlazador: hay que
-rem                               copiarla a mano o la pantalla sale en negro.
-rem    MSVCP140.dll               \  runtime de Visual C++. Las que el .exe y
-rem    MSVCP140_ATOMIC_WAIT.dll    | rexruntime importan y que no vienen con
-rem    VCRUNTIME140.dll            | Windows. Se resuelven desde el propio
-rem    VCRUNTIME140_1.dll         /  toolchain, sin rutas fijas.
+rem  WHAT GOES INTO build\
+rem    NFS_Most_Wanted.exe        THE LAUNCHER, with the game's icon. This is
+rem                               what you open: it brings up the options
+rem                               window, and from there you play.
+rem    nfsmw.exe                  the actual game. It used to be called
+rem                               NFS_Most_Wanted.exe until the launcher took
+rem                               that name. Opening it directly still works
+rem                               just like always: it looks for the ISO
+rem                               next to it.
+rem    rexruntime.dll             SDK runtime: this is where the fixes live
+rem    rexgpu-xenos.dll           GPU emulation. Loaded with LoadLibrary based
+rem                               on the gpu_plugin cvar, so it does NOT show
+rem                               up in the linker's dependencies: it has to
+rem                               be copied by hand or the screen stays black.
+rem    MSVCP140.dll               \  Visual C++ runtime. The ones the .exe and
+rem    MSVCP140_ATOMIC_WAIT.dll    | rexruntime import that don't ship with
+rem    VCRUNTIME140.dll            | Windows. Resolved from the toolchain
+rem    VCRUNTIME140_1.dll         /  itself, with no fixed paths.
 rem    LANZADOR.bat / lanzador.ps1
 rem    nfsmw.toml  COMPARAR_VIDEO.bat  PROBAR.bat  matriz.ps1  LEEME.txt
 rem
-rem  LA ISO NO SE COPIA. Pesa varios GB, es tuya, y el juego la lee al vuelo.
-rem  Ponla tu en build\ cuando quieras usar la carpeta.
+rem  THE ISO IS NOT COPIED. It's several GB, it's yours, and the game reads
+rem  it on the fly. Put it in build\ yourself whenever you want to use the
+rem  folder.
 rem
-rem  Se usa SALIDA para los codigos de retorno, NUNCA "RC": esa variable la
-rem  pone vcvars64 con la ruta del compilador de recursos y CMake la lee al
-rem  detectar el toolchain.
+rem  SALIDA is used for return codes, NEVER "RC": that variable is set by
+rem  vcvars64 with the resource compiler's path, and CMake reads it when
+rem  detecting the toolchain.
 rem ===========================================================================
 
 if /i "%~1"=="__run" goto :run
@@ -132,8 +138,9 @@ rem ===========================================================================
 call "%~dp0tools\_entorno_vs.bat"
 if not defined ENTORNO_OK goto fin
 
-rem Sin Python no se pueden aplicar los parches, y sin parches la carpeta
-rem saldria sin los arreglos. Mejor pararlo aqui que armar una build muda.
+rem Without Python the patches can't be applied, and without patches the
+rem folder would come out without the fixes. Better to stop here than build
+rem a broken build.
 if not defined PY (
     echo [ERROR] No encuentro Python. Hace falta para aplicar los arreglos
     echo         del SDK, que es donde vive el del audio.
@@ -144,12 +151,13 @@ if not defined PY (
 echo ############################################
 echo # 1/5  ARREGLOS DEL SDK
 echo ############################################
-rem Idempotentes: si ya estan puestos lo dicen y no tocan nada.
+rem Idempotent: if they're already applied they say so and touch nothing.
 rem
-rem EL ORDEN IMPORTA. parche_anillo va antes que parche_desatasco porque es
-rem quien mete <atomic> y <chrono> en el fichero del kernel, y el desatasco los
-rem usa. El desatasco lo comprueba y se niega a aplicarse si falta, asi que
-rem como mucho esto se para aqui con un mensaje claro, no a mitad de la build.
+rem ORDER MATTERS. parche_anillo runs before parche_desatasco because it's
+rem the one that adds <atomic> and <chrono> to the kernel file, and desatasco
+rem uses them. desatasco checks for that and refuses to apply if it's
+rem missing, so at worst this stops here with a clear message, not halfway
+rem through the build.
 %PY% "%~dp0tools\parche_diagnostico.py"
 if errorlevel 1 (
     echo [ERROR] No se pudo aplicar el parche de diagnostico. Me detengo.
@@ -168,10 +176,10 @@ if errorlevel 1 (
     echo         para repartir, asi que no sigo y no toco build\
     goto fin
 )
-rem Vsync y limitador de fps. De fabrica NINGUNO de los dos funciona: "vsync"
-rem existe como cvar pero el Present del presentador llevaba el SyncInterval
-rem clavado a 0, y limitador no habia ninguno. Sin esto, esos dos ajustes del
-rem lanzador no hacen nada y el propio lanzador lo avisa en rojo.
+rem Vsync and the fps limiter. Out of the box NEITHER works: "vsync" exists
+rem as a cvar but the presenter's Present had SyncInterval hardcoded to 0,
+rem and there was no limiter at all. Without this, those two launcher
+rem settings do nothing and the launcher itself flags it in red.
 %PY% "%~dp0tools\parche_presentador.py"
 if errorlevel 1 (
     echo [ERROR] No se pudo aplicar el vsync y el limite de fps. Me detengo.
@@ -182,7 +190,7 @@ if errorlevel 1 (
     echo [ERROR] No se pudo aplicar el parche de GPU. Me detengo.
     goto fin
 )
-rem Este es de comodidad, no de correccion: el boton de restaurar del menu F4.
+rem This one's a convenience, not a correctness fix: the restore button in the F4 menu.
 %PY% "%~dp0tools\parche_restaurar.py"
 if errorlevel 1 (
     echo [ERROR] No se pudo mejorar el menu de ajustes. Me detengo.
@@ -198,9 +206,9 @@ if errorlevel 1 (
     echo [ERROR] No se pudo anadir el selector de API grafica. Me detengo.
     goto fin
 )
-rem La puerta del multijugador. Anade el ajuste grant_user_privileges, APAGADO
-rem por defecto, asi que ponerlo aqui no cambia el comportamiento de nadie: solo
-rem deja el interruptor disponible en F4.
+rem The multiplayer gate. Adds the grant_user_privileges setting, OFF by
+rem default, so adding it here doesn't change anyone's behavior: it just
+rem leaves the switch available in F4.
 %PY% "%~dp0tools\parche_privilegios.py"
 if errorlevel 1 (
     echo [ERROR] No se pudo anadir el ajuste de privilegios. Me detengo.
@@ -215,19 +223,19 @@ echo Los arreglos viven en rexruntime.dll, no en el .exe. Si el SDK ya
 echo estaba compilado y no cambio nada, esto tarda segundos.
 echo.
 rem ---------------------------------------------------------------------------
-rem  CONFIGURAR CON VULKAN ENCENDIDO
+rem  CONFIGURE WITH VULKAN ON
 rem
-rem  En Windows el SDK trae REXGLUE_USE_VULKAN en OFF, asi que el backend de
-rem  Vulkan -que esta entero en src/graphics/vulkan- no se compila y el ajuste
-rem  gpu_backend=vulkan no tendria nada que cargar.
+rem  On Windows the SDK ships with REXGLUE_USE_VULKAN set to OFF, so the
+rem  Vulkan backend -which lives entirely in src/graphics/vulkan- doesn't get
+rem  compiled, and the gpu_backend=vulkan setting would have nothing to load.
 rem
-rem  Esto lo enciende en la cache de CMake. Es idempotente: si ya estaba, la
-rem  configuracion no cambia nada y tarda segundos. LA PRIMERA VEZ NO: cambiar
-rem  una opcion obliga a recompilar medio SDK, y ademas entran glslang y
-rem  spirv-tools. Esa vez tarda un buen rato.
+rem  This turns it on in the CMake cache. It's idempotent: if it was already
+rem  set, configuring changes nothing and takes seconds. NOT THE FIRST TIME
+rem  THOUGH: changing an option forces half the SDK to recompile, and pulls
+rem  in glslang and spirv-tools too. That run takes a good while.
 rem
-rem  No hace falta instalar el SDK de Vulkan: las cabeceras, el cargador, el
-rem  asignador de memoria y glslang ya vienen en thirdparty\
+rem  No need to install the Vulkan SDK: the headers, loader, memory allocator
+rem  and glslang already ship in thirdparty\
 rem ---------------------------------------------------------------------------
 pushd "%SDK%"
 cmake --preset win-amd64 -DREXGLUE_USE_VULKAN=ON
@@ -264,21 +272,22 @@ pushd "app"
 cmake --preset win-amd64-release
 
 rem ---------------------------------------------------------------------------
-rem  DOS PASADAS, Y NO ES CAPRICHO
+rem  TWO PASSES, AND IT'S NOT A WHIM
 rem
-rem  El codegen reescribe generated\default\nfsmw_pch.h, y de esa cabecera sale
-rem  la precompilada (cmake_pch.hxx.pch) que usan los 131 ficheros generados.
+rem  Codegen rewrites generated\default\nfsmw_pch.h, and the precompiled
+rem  header (cmake_pch.hxx.pch) that the 131 generated files use is built
+rem  from that header.
 rem
-rem  En UNA sola pasada, ninja decide al arrancar que ficheros estan sucios.
-rem  En ese momento nfsmw_pch.h todavia no ha cambiado, asi que da la PCH por
-rem  buena. Luego, ya dentro de la misma pasada, el codegen la cambia. Cuando
-rem  le toca el turno a los .cpp, clang compara y aborta:
+rem  In a SINGLE pass, ninja decides at startup which files are dirty. At
+rem  that point nfsmw_pch.h hasn't changed yet, so it considers the PCH
+rem  good. Then, still within the same pass, codegen changes it. When it's
+rem  the .cpp files' turn, clang compares and aborts:
 rem
 rem      fatal error: file 'nfsmw_pch.h' has been modified since the
 rem      precompiled header was built: size changed (was 18553, now 18522)
 rem
-rem  Lanzando el codegen primero y por separado, la segunda pasada arranca con
-rem  las cabeceras ya definitivas y recalcula bien que hay que rehacer.
+rem  By running codegen first and separately, the second pass starts with
+rem  the headers already final and correctly figures out what needs rebuilding.
 rem ---------------------------------------------------------------------------
 echo -- Pasada 1: codegen --
 cmake --build --preset win-amd64-release --target nfsmw_codegen
@@ -303,8 +312,8 @@ echo.
 echo ############################################
 echo # 4/5  ARMAR build\
 echo ############################################
-rem Ademas de copiar, borra los restos de ejecuciones anteriores -logs\,
-rem matriz\, shaders\, cache\-, que son de ESTA maquina y no deben viajar.
+rem Besides copying, it removes leftovers from previous runs -logs\, matriz\,
+rem shaders\, cache\-, which belong to THIS machine and shouldn't travel.
 pushd "app"
 cmake --build --preset win-amd64-release --target dist
 set "SALIDA=!errorlevel!"
@@ -316,18 +325,19 @@ if not "!SALIDA!"=="0" (
 echo.
 
 rem ---------------------------------------------------------------------------
-rem  El lanzador, y el cambio de nombre que lo pone delante
+rem  The launcher, and the rename that puts it in front
 rem
-rem  El target dist deja el juego como build\NFS_Most_Wanted.exe. Esto lo
-rem  renombra a nfsmw.exe y pone el lanzador en su sitio, para que hacer doble
-rem  clic en el icono del juego abra la ventana de opciones. Abrir nfsmw.exe
-rem  directamente sigue funcionando igual que antes.
+rem  The dist target leaves the game as build\NFS_Most_Wanted.exe. This
+rem  renames it to nfsmw.exe and puts the launcher in its place, so double-
+rem  clicking the game's icon opens the options window. Opening nfsmw.exe
+rem  directly still works just like before.
 rem
-rem  Va ANTES de la comprobacion de autonomia a proposito: asi lo que se
-rem  comprueba es la carpeta tal y como va a quedar, lanzador incluido.
+rem  Runs BEFORE the self-containment check on purpose: that way what gets
+rem  checked is the folder as it will actually end up, launcher included.
 rem
-rem  Si falla, la carpeta sigue sirviendo: el juego estara como nfsmw.exe o como
-rem  NFS_Most_Wanted.exe y LANZADOR.bat funciona igual. Por eso no se aborta.
+rem  If it fails, the folder is still usable: the game will be either
+rem  nfsmw.exe or NFS_Most_Wanted.exe and LANZADOR.bat works the same either
+rem  way. That's why this doesn't abort.
 echo -- Lanzador --
 call "%~dp0CONSTRUIR_LANZADOR.bat" /silencioso
 set "SALIDA=!errorlevel!"
@@ -340,29 +350,30 @@ echo.
 echo ############################################
 echo # 5/5  COMPROBAR QUE SEA AUTONOMA
 echo ############################################
-rem Lee la tabla de importaciones PE de cada binario de build\ y sigue las
-rem dependencias en cadena. No usa dumpbin a proposito: dumpbin viene con
-rem Visual Studio, y la gracia es comprobarlo sin suponer herramientas.
+rem Reads each build\ binary's PE import table and follows the dependency
+rem chain. Doesn't use dumpbin on purpose: dumpbin comes with Visual Studio,
+rem and the point is to check this without assuming any tools are installed.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\comprobar_dist.ps1"
 
 echo.
 
 rem ---------------------------------------------------------------------------
-rem  Y de paso, las carpetas de reparto
+rem  And while we're at it, the distribution folders
 rem
-rem  Antes esto era un paso a mano: "comprime build\ sin la ISO". Se hace aqui
-rem  porque es justo el momento en que build\ esta recien hecha y limpia, y
-rem  porque el paso a mano tenia una trampa: la ISO son varios GB y es facil
-rem  mandarla sin querer.
+rem  This used to be a manual step: "zip build\ without the ISO". It's done
+rem  here because this is exactly the moment build\ is freshly made and
+rem  clean, and because the manual step had a trap: the ISO is several GB and
+rem  it's easy to send it by mistake.
 rem
-rem  Deja dos carpetas al lado del proyecto, en "build release":
+rem  Leaves two folders next to the project, in "build release":
 rem
-rem    NFSMW Windows x64\              lista para jugar y para mandar a alguien
-rem                                    que tenga SU PROPIA copia del juego
-rem    NFSMW Windows x64 - Portable\   todo menos el juego; esta si se publica
+rem    NFSMW Windows x64\              ready to play, and to send to someone
+rem                                    who has THEIR OWN copy of the game
+rem    NFSMW Windows x64 - Portable\   everything but the game; this one is
+rem                                    the one to publish
 rem
-rem  Si no encuentra el script no pasa nada: build\ ya esta hecha y se puede
-rem  comprimir a mano como siempre.
+rem  If the script isn't found, nothing happens: build\ is already made and
+rem  can be zipped by hand as always.
 set "RELEASE=%~dp0..\build release\PREPARAR_RELEASE.bat"
 if exist "%RELEASE%" (
     echo ############################################

@@ -8,7 +8,7 @@ echo   Extraer el ISO y leer la cabecera del XEX
 echo ============================================
 echo.
 
-rem --- localizar Python -----------------------------------------------------
+rem --- locate Python ----------------------------------------------------------
 set "PY="
 py -3 --version >nul 2>nul && set "PY=py -3"
 if not defined PY (
@@ -28,7 +28,7 @@ for /f "delims=" %%v in ('%PY% --version 2^>^&1') do set "PYVER=%%v"
 echo Python detectado: %PYVER%
 echo.
 
-rem --- menu -----------------------------------------------------------------
+rem --- menu ---------------------------------------------------------------------
 echo Que quieres hacer?
 echo.
 echo   1. Solo listar el contenido del ISO  (rapido, no escribe nada)

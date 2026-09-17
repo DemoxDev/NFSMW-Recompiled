@@ -3,35 +3,38 @@ setlocal enabledelayedexpansion
 chcp 65001 >nul 2>&1
 
 rem =============================================================================
-rem  Construye Lanzador.exe
+rem  Builds Lanzador.exe
 rem
-rem  Compila tools\lanzador\Lanzador.cs con el compilador de C# que YA VIENE
-rem  con Windows. No hay que instalar Visual Studio, ni el SDK de .NET, ni
-rem  nada: csc.exe esta dentro de C:\Windows\Microsoft.NET\ desde Windows 8.
+rem  Compiles tools\lanzador\Lanzador.cs with the C# compiler that ALREADY
+rem  SHIPS with Windows. No need to install Visual Studio, or the .NET SDK,
+rem  or anything: csc.exe has been inside C:\Windows\Microsoft.NET\ since
+rem  Windows 8.
 rem
-rem  El icono y la portada quedan DENTRO del exe. Una vez construido, el
-rem  Lanzador.exe se lleva solo a donde sea; no necesita las imagenes al lado.
+rem  The icon and cover art end up INSIDE the exe. Once built, Lanzador.exe
+rem  can be carried anywhere on its own; it doesn't need the images next to it.
 rem
-rem  EN build\ EL LANZADOR SE LLAMA NFS_Most_Wanted.exe
+rem  IN build\ THE LAUNCHER IS CALLED NFS_Most_Wanted.exe
 rem  ==================================================
-rem  Y el juego pasa a llamarse nfsmw.exe, que es como se llama en el arbol del
-rem  proyecto. El motivo es solo que al hacer doble clic en el icono del juego
-rem  salga la ventana de opciones, como en cualquier juego con lanzador.
+rem  And the game gets renamed to nfsmw.exe, which is what it's called in the
+rem  project tree. The only reason is so that double-clicking the game's icon
+rem  brings up the options window, like in any game with a launcher.
 rem
-rem  El juego SIGUE sabiendo arrancar solo: nfsmw.exe a pelo funciona igual que
-rem  antes -se busca la ISO al lado y se pone gpu_plugin y mnk_mode el solo-,
-rem  asi que ahi queda como salida por si el lanzador diera guerra.
+rem  The game STILL knows how to start on its own: nfsmw.exe by itself works
+rem  just like before -it looks for the ISO next to it and sets gpu_plugin and
+rem  mnk_mode on its own-, so it stays there as a fallback in case the
+rem  launcher gives trouble.
 rem
-rem  Tampoco cambia donde guarda sus cosas el juego: esa carpeta sale de
-rem  GetName() en el codigo, no del nombre del fichero.
+rem  It also doesn't change where the game stores its data: that folder comes
+rem  from GetName() in the code, not from the filename.
 rem
-rem  El cambio de nombre se hace aqui abajo y es idempotente: si ya existe
-rem  build\nfsmw.exe, es que ya se hizo y solo se refresca el lanzador.
+rem  The rename happens further down and is idempotent: if build\nfsmw.exe
+rem  already exists, it means this already ran and only the launcher gets
+rem  refreshed.
 rem
-rem  Se puede llamar desde otro .bat con  /silencioso  para que no haga pausa.
+rem  Can be called from another .bat with  /silencioso  so it doesn't pause.
 rem
-rem  OJO CON "RC": vcvars64 lo usa para el compilador de recursos, asi que en
-rem  este proyecto los codigos de retorno van siempre en SALIDA.
+rem  WATCH OUT FOR "RC": vcvars64 uses it for the resource compiler, so in
+rem  this project return codes always go in SALIDA.
 rem =============================================================================
 
 set "RAIZ=%~dp0"
@@ -48,16 +51,18 @@ echo   Lanzador de NFS Most Wanted - Recompilacion
 echo  ======================================================================
 echo.
 
-rem ---- Que estan los ingredientes --------------------------------------------
+rem ---- Check that the ingredients are there -----------------------------------
 rem
-rem  Solo el codigo es obligatorio. La portada y el icono son la caratula del
-rem  juego, arte de Electronic Arts, y por eso NO estan en el repositorio.
+rem  Only the code is required. The cover art and icon are the game's box
+rem  art, Electronic Arts' artwork, and that's why they're NOT in the
+rem  repository.
 rem
-rem  El lanzador arranca perfectamente sin ellas: CargarRecurso devuelve null si
-rem  el recurso no esta y el panel lateral se dibuja en negro con el titulo. Asi
-rem  que aqui se avisa y se sigue, en vez de negarse a compilar.
+rem  The launcher starts up perfectly fine without them: CargarRecurso
+rem  returns null if the resource isn't there and the side panel draws in
+rem  black with the title. So here it just warns and continues, instead of
+rem  refusing to compile.
 rem
-rem  Si quieres poner las tuyas, ver docs\lanzador.md.
+rem  If you want to add your own, see docs\lanzador.md.
 if not exist "%FUENTE%\Lanzador.cs" (
     echo  [ERROR] Falta %FUENTE%\Lanzador.cs
     echo.
@@ -78,11 +83,11 @@ if exist "%FUENTE%\portada.jpg" (
     echo  [aviso] No hay portada.jpg. El panel lateral saldra en negro.
 )
 
-rem ---- Buscar csc.exe --------------------------------------------------------
+rem ---- Find csc.exe ------------------------------------------------------------
 rem
-rem  Se prueba de mas nuevo a mas viejo. El v4.0.30319 esta en todos los Windows
-rem  modernos; los v3.5 y v2.0 son de Windows 7 y tan antiguos que ni se
-rem  intentan, porque WinForms de esa epoca no trae cosas que se usan aqui.
+rem  Tried newest to oldest. v4.0.30319 is on every modern Windows; v3.5 and
+rem  v2.0 are from Windows 7 and old enough that they're not even attempted,
+rem  because WinForms from that era doesn't have things used here.
 set "CSC="
 for %%D in (Framework64 Framework) do (
     if not defined CSC (
@@ -113,14 +118,14 @@ echo  Fuente:      %FUENTE%\Lanzador.cs
 echo  Destino:     %SALIDA_EXE%
 echo.
 
-rem ---- Compilar --------------------------------------------------------------
+rem ---- Compile -----------------------------------------------------------------
 rem
-rem  /target:winexe  y no /target:exe, para que no salga una ventana negra de
-rem                  consola detras del lanzador.
-rem  /win32icon      el icono que ve el explorador de archivos.
-rem  /resource       mete la portada DENTRO del exe. El nombre de despues de la
-rem                  coma es el que busca el codigo, asi que tiene que ser
-rem                  exactamente "portada.jpg".
+rem  /target:winexe  and not /target:exe, so no black console window shows up
+rem                  behind the launcher.
+rem  /win32icon      the icon the file explorer sees.
+rem  /resource       puts the cover art INSIDE the exe. The name after the
+rem                  comma is what the code looks for, so it has to be
+rem                  exactly "portada.jpg".
 echo  Compilando...
 "%CSC%" /nologo /target:winexe /optimize+ /platform:anycpu ^
     /out:"%SALIDA_EXE%" ^
@@ -148,18 +153,19 @@ if not exist "%SALIDA_EXE%" (
     goto :fin_mal
 )
 
-rem ---- Ponerlo en la carpeta repartible ---------------------------------------
+rem ---- Put it in the distributable folder --------------------------------------
 rem
-rem  Aqui es donde el lanzador toma el nombre del juego. Dos casos, y se
-rem  distinguen por si existe ya build\nfsmw.exe:
+rem  This is where the launcher takes over the game's name. Two cases,
+rem  distinguished by whether build\nfsmw.exe already exists:
 rem
-rem    todavia no    build\NFS_Most_Wanted.exe es EL JUEGO. Se le cambia el
-rem                  nombre a nfsmw.exe y el lanzador ocupa su sitio.
-rem    ya hecho      build\nfsmw.exe existe, o sea que NFS_Most_Wanted.exe ya
-rem                  es un lanzador de una vez anterior. Solo se refresca.
+rem    not yet       build\NFS_Most_Wanted.exe is THE GAME. It gets renamed
+rem                  to nfsmw.exe and the launcher takes its place.
+rem    already done  build\nfsmw.exe exists, meaning NFS_Most_Wanted.exe is
+rem                  already a launcher from a previous run. Just refreshed.
 rem
-rem  Asi se puede ejecutar esto las veces que haga falta sin romper nada, que
-rem  es justo lo que pasa cuando lo llama DIST.bat en cada reconstruccion.
+rem  This way it can be run as many times as needed without breaking
+rem  anything, which is exactly what happens when DIST.bat calls it on every
+rem  rebuild.
 set "DESTINO=%RAIZ%\build"
 if not exist "%DESTINO%" goto sin_build
 

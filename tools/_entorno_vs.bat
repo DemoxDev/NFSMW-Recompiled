@@ -1,13 +1,14 @@
 @echo off
 rem ===========================================================================
-rem  Prepara el entorno de compilacion. Se invoca con CALL desde los demas
-rem  .bat, por eso NO lleva setlocal: las variables tienen que sobrevivir.
+rem  Prepares the build environment. Invoked with CALL from the other .bat
+rem  files, which is why it does NOT use setlocal: the variables have to
+rem  survive.
 rem
-rem  Deja listo:
-rem    - el entorno x64 de Visual Studio (INCLUDE, LIB, PATH)
-rem    - cmake / ninja / clang NATIVOS de VS por delante de cualquier MSYS2
-rem    - el bin del ReXGlue SDK instalado, para que "rexglue" responda
-rem    - ENTORNO_OK=1 si todo fue bien
+rem  Leaves ready:
+rem    - Visual Studio's x64 environment (INCLUDE, LIB, PATH)
+rem    - VS's NATIVE cmake / ninja / clang ahead of any MSYS2
+rem    - the installed ReXGlue SDK's bin, so "rexglue" responds
+rem    - ENTORNO_OK=1 if everything went fine
 rem ===========================================================================
 
 set "ENTORNO_OK="
@@ -50,11 +51,11 @@ if errorlevel 1 (
     exit /b 1
 )
 
-rem System32 PRIMERO, antes que las de VS. Con MSYS2 en el PATH, utilidades
-rem de Windows como find.exe, sort.exe o where.exe quedan tapadas por sus
-rem homonimas de Unix, que aceptan otros parametros y fallan de formas raras
-rem ("find: /c/$Recycle.Bin: Permission denied"). Se antepone aqui para que
-rem los prepends de VS que vienen despues queden por delante de esta.
+rem System32 FIRST, ahead of VS's. With MSYS2 on the PATH, Windows utilities
+rem like find.exe, sort.exe, or where.exe get shadowed by their Unix
+rem namesakes, which accept different parameters and fail in strange ways
+rem ("find: /c/$Recycle.Bin: Permission denied"). It's prepended here so the
+rem VS prepends that come after end up ahead of this one.
 set "PATH=%SystemRoot%\System32;%PATH%"
 
 set "VSCMAKE=%VSPATH%\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin"
@@ -64,7 +65,7 @@ if exist "%VSNINJA%\ninja.exe" set "PATH=%VSNINJA%;%PATH%"
 if exist "%VSCMAKE%\cmake.exe" set "PATH=%VSCMAKE%;%PATH%"
 if exist "%VSLLVM%\clang.exe"  set "PATH=%VSLLVM%;%PATH%"
 
-rem El SDK instalado
+rem The installed SDK
 set "SDK=%~dp0..\..\rexglue-sdk"
 set "SDKBIN=%SDK%\out\install\win-amd64\bin"
 if exist "%SDKBIN%" set "PATH=%SDKBIN%;%PATH%"
