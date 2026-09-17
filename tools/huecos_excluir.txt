@@ -1,9 +1,9 @@
-# Direcciones que NO deben declararse como funcion, aunque sean huecos.
-# tools/huecos.py las omite al generar app/huecos.toml.
+# Addresses that must NOT be declared as a function, even though they're gaps.
+# tools/huecos.py skips them when generating app/huecos.toml.
 #
 # "not in any code region" -> "has no blocks - generating stub"
-#   Son bloques de datos incrustados en .text. Declararlos produce funciones
-#   vacias que, si alguien las llama, devuelven en silencio en vez de avisar.
+#   These are data blocks embedded in .text. Declaring them produces empty
+#   functions that, if anything calls them, return silently instead of warning.
 0x8262E954
 0x82633AC4
 0x826B88E4

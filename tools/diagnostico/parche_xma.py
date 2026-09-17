@@ -1,90 +1,93 @@
 #!/usr/bin/env python3
 """
-Instrumenta la cadena de audio entera.  (version 3)
+Instruments the entire audio chain.  (version 3)
 
     python tools/parche_xma.py            aplicar
     python tools/parche_xma.py --estado
     python tools/parche_xma.py --revertir
 
-Toca tres ficheros del SDK:
+Touches three SDK files:
 
-    src/audio/xma_context.cpp        el descodificador
-    src/audio/audio_system.cpp       el hilo que llama al juego
-    src/audio/sdl/sdl_audio_driver.cpp   la salida a la tarjeta
+    src/audio/xma_context.cpp        the decoder
+    src/audio/audio_system.cpp       the thread that calls the game
+    src/audio/sdl/sdl_audio_driver.cpp   the output to the sound card
 
-Guarda un .original de cada uno la primera vez y es idempotente. Si detecta
-una version anterior del parche, restaura desde el .original antes de aplicar
-esta, para que los anclajes encajen sobre el codigo limpio.
+Saves a .original of each one the first time and is idempotent. If it detects
+a previous version of the patch, it restores from the .original before
+applying this one, so the anchors line up against the clean code.
 
 
-LO QUE YA SABEMOS, Y POR QUE HACE FALTA UNA v3
+WHAT WE ALREADY KNOW, AND WHY A v3 IS NEEDED
 ==============================================
 
-El cuelgue esta localizado: el hilo 0xD del juego gira entre
-XMAGetOutputBufferWriteOffset y XMAGetOutputBufferReadOffset esperando audio
-descodificado que no llega. La muerte del audio y el cuelgue al volver al menu
-son EL MISMO FALLO, no dos.
+The hang has been located: the game's thread 0xD spins between
+XMAGetOutputBufferWriteOffset and XMAGetOutputBufferReadOffset waiting for
+decoded audio that never arrives. The audio dying and the hang when returning
+to the menu are THE SAME BUG, not two.
 
-La v2 ya midio lo importante: 6739 kicks, 7160 pases de Work, y 1232 salidas
-tempranas TODAS por output_buffer_valid == 0. La rama de "no cabe" -que era mi
-sospechosa- no se disparo ni una vez. Y luego el XMA se para en seco.
+v2 already measured the important part: 6739 kicks, 7160 Work passes, and
+1232 early exits ALL due to output_buffer_valid == 0. The "no room" branch
+-which was my suspect- never fired once. And then the XMA stops dead.
 
-Pero la v2 dejo dos huecos, los dos mios:
+But v2 left two gaps, both mine:
 
-  1. El log del estado de Work lo puse ANTES de PrepareOutputRingBuffer. Y
-     resulta que PrepareOutputRingBuffer es justo quien recalcula
-     remaining_subframe_blocks_in_output_buffer_ a partir de los offsets. O
-     sea que el "hueco" que salia era el valor SOBRANTE del pase anterior.
-     Salia 0 siempre y no significaba nada. En la v3 va despues.
+  1. I put the Work state log BEFORE PrepareOutputRingBuffer. And it turns out
+     PrepareOutputRingBuffer is exactly what recomputes
+     remaining_subframe_blocks_in_output_buffer_ from the offsets. In other
+     words, the "gap" it printed was the LEFTOVER value from the previous
+     pass. It always came out 0 and meant nothing. In v3 it goes after.
 
-  2. No se veia el otro lado de la cadena. Y ahi esta el resto de la historia.
+  2. The other side of the chain wasn't visible. And that's the rest of the
+     story.
 
 
-LA CADENA COMPLETA, Y DONDE SE ROMPE
-====================================
+THE COMPLETE CHAIN, AND WHERE IT BREAKS
+==========================================
 
-El audio de la 360 pasa por tres piezas, y cada una espera a la anterior:
+Audio on the 360 goes through three pieces, and each one waits on the
+previous one:
 
-    juego  ->  XmaContext::Work()  ->  frames_queued_  ->  SDLCallback
+    game  ->  XmaContext::Work()  ->  frames_queued_  ->  SDLCallback
       ^                                                        |
-      |                    semaforo, una suelta por frame       |
+      |                 semaphore, one release per frame        |
       +--------------------------------------------------------+
 
-SDLCallback suelta el semaforo SOLO cuando consume un frame de verdad. Si la
-cola se vacia, no suelta nada; entonces el WaitAny del AudioWorker se agota a
-los 500 ms y NO llama al callback del juego; y si no se llama al juego, el
-juego no entrega mas audio. Es un anillo, y con que se pare un eslabon se
-paran los tres.
+SDLCallback releases the semaphore ONLY when it actually consumes a frame. If
+the queue empties out, it releases nothing; then the AudioWorker's WaitAny
+times out at 500 ms and does NOT call the game's callback; and if the game
+isn't called, the game delivers no more audio. It's a ring, and if one link
+stops, all three stop.
 
-El log de la v2 encaja con eso al detalle: queued_count=8 a las 22:31:25,
-nada mas despues, y "no frames queued (silence)" desde las 22:31:52. Los 8
-frames se gastaron y no llego ninguno mas.
+v2's log matches that exactly: queued_count=8 at 22:31:25, nothing after
+that, and "no frames queued (silence)" starting at 22:31:52. The 8 frames got
+used up and no more arrived.
 
-Lo que NO se puede saber con la v2 es si el AudioWorker siguio llamando al
-juego despues del cuelgue, porque el SDK tiene esos dos contadores topados:
+What v2 CANNOT tell us is whether the AudioWorker kept calling the game after
+the hang, because the SDK has those two counters capped:
 
-    if (diag_pump_count < 10)      en audio_system.cpp
-    if (sdl_callback_count < 10)   en sdl_audio_driver.cpp
+    if (diag_pump_count < 10)      in audio_system.cpp
+    if (sdl_callback_count < 10)   in sdl_audio_driver.cpp
 
-A las diez lineas se callan para siempre. Justo antes del fallo. Por eso la
-v3 los cambia por un latido de una linea por segundo: no inunda el log y no
-se calla nunca, que es exactamente lo que hace falta aqui.
+At ten lines they go silent forever. Right before the failure. That's why v3
+replaces them with a heartbeat of one line per second: it doesn't flood the
+log and it never goes silent, which is exactly what's needed here.
 
 
-QUE VA A CONTESTAR
-==================
+WHAT THIS WILL ANSWER
+=========================
 
-Con las tres piezas instrumentadas, la ultima linea de cada una antes del
-silencio dice quien se paro primero:
+With the three pieces instrumented, the last line from each one before the
+silence tells us who stopped first:
 
-  - si dejan de salir kicks     -> el juego dejo de pedir audio
-  - si siguen los kicks pero Work se sale -> el descodificador se atasca
-  - si el latido del worker sigue vivo pero con envios=0 congelado -> el
-    semaforo no se suelta, y el eslabon roto es la salida
-  - si el latido para del todo -> el propio hilo de audio esta bloqueado
+  - if kicks stop appearing        -> the game stopped requesting audio
+  - if kicks keep coming but Work bails out -> the decoder is getting stuck
+  - if the worker's heartbeat is still alive but with envios=0 frozen -> the
+    semaphore isn't being released, and the broken link is the output
+  - if the heartbeat stops entirely -> the audio thread itself is blocked
 
-Todo detras de log_noisy salvo el latido, que va a DEBUG porque es una linea
-por segundo y es la que importa. LOG_DETALLADO.bat ya enciende las dos cosas.
+Everything is behind log_noisy except the heartbeat, which goes to DEBUG
+because it's one line per second and it's the one that matters.
+LOG_DETALLADO.bat already turns both of those on.
 """
 
 import argparse
@@ -94,9 +97,9 @@ import sys
 
 MARCA = "PARCHE LOCAL - instrumentacion de audio v4"
 
-# Marcas de versiones anteriores. Si aparece alguna, se restaura el fichero
-# desde su .original antes de aplicar, porque los anclajes de abajo estan
-# escritos contra el codigo LIMPIO del SDK y no encajarian sobre el parcheado.
+# Markers of previous versions. If any of them shows up, the file is restored
+# from its .original before applying, because the anchors below are written
+# against the SDK's CLEAN code and wouldn't match over the patched version.
 MARCAS_VIEJAS = [
     "PARCHE LOCAL - instrumentacion de audio v3",
     "PARCHE LOCAL - el anillo de salida no se llena del todo",
@@ -106,7 +109,7 @@ MARCAS_VIEJAS = [
 ]
 
 # ---------------------------------------------------------------------------
-#  1) src/audio/xma_context.cpp   -  el descodificador
+#  1) src/audio/xma_context.cpp   -  the decoder
 # ---------------------------------------------------------------------------
 
 ENABLE_ANCLA = """void XmaContext::Enable() {
@@ -163,9 +166,9 @@ WORK_NUEVO = """  if (!data.output_buffer_valid) {
       uint32_t(data.output_buffer_padding));
 """
 
-# La linea original de PrepareOutputRingBuffer se movio dentro del bloque de
-# arriba, asi que hay que quitar la que quedaba suelta unas lineas mas abajo.
-# Si no, se llamaria dos veces y la segunda pisaria los offsets del ring.
+# The original PrepareOutputRingBuffer line was moved inside the block above,
+# so the one left dangling a few lines below has to be removed. Otherwise it
+# would get called twice and the second call would clobber the ring's offsets.
 DUPLICADO_ANCLA = """  memory::RingBuffer output_rb = PrepareOutputRingBuffer(&data);
 
   // Consume-only context: no input, just drain remaining subframes.
@@ -237,7 +240,7 @@ XMA_ANCLAS = [
 ]
 
 # ---------------------------------------------------------------------------
-#  2) src/audio/audio_system.cpp  -  el hilo que llama al juego
+#  2) src/audio/audio_system.cpp  -  the thread that calls the game
 # ---------------------------------------------------------------------------
 
 LATIDO_ANCLA = """  // Main run loop.
@@ -356,7 +359,7 @@ SISTEMA_ANCLAS = [
 ]
 
 # ---------------------------------------------------------------------------
-#  3) src/audio/sdl/sdl_audio_driver.cpp  -  la salida a la tarjeta
+#  3) src/audio/sdl/sdl_audio_driver.cpp  -  the output to the sound card
 # ---------------------------------------------------------------------------
 
 SILENCIO_ANCLA = """    static uint32_t sdl_callback_count = 0;
@@ -467,11 +470,11 @@ def original_de(f):
 
 
 def restaurar_si_hay_version_vieja(f):
-    """Deja el fichero como estaba en el SDK si lleva un parche anterior.
+    """Leaves the file as it was in the SDK if it carries a previous patch.
 
-    Sin esto, los anclajes -escritos contra el codigo limpio- no encajarian
-    sobre un fichero ya parcheado, y el script abortaria diciendo que el SDK
-    ha cambiado, que seria una pista falsa.
+    Without this, the anchors -written against the clean code- wouldn't match
+    over an already-patched file, and the script would abort saying the SDK
+    has changed, which would be a false lead.
     """
     if not f.exists():
         return
@@ -524,10 +527,11 @@ def main():
         (audio / "audio_system.cpp", SISTEMA_ANCLAS),
         (audio / "sdl" / "sdl_audio_driver.cpp", SDL_ANCLAS),
     ]
-    # La v1 tocaba xma_decoder.cpp -le ponia un plazo de 4 ms al Wait del
-    # worker-. Se demostro inutil: cada contexto se apaga solo tras un pase,
-    # asi que barrer mas a menudo encuentra los 320 apagados. Y en un equipo
-    # de dos nucleos era CPU gastada de balde. Se deshace si sigue puesta.
+    # v1 touched xma_decoder.cpp -it gave the worker's Wait a 4 ms timeout-.
+    # It proved useless: every context turns itself off after a single pass,
+    # so polling more often just finds the same 320 that are already off. And
+    # on a two-core machine it was CPU wasted for nothing. It gets undone if
+    # it's still in place.
     f_dec = audio / "xma_decoder.cpp"
 
     if args.estado:
