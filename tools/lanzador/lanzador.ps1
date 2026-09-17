@@ -1,58 +1,60 @@
 # =============================================================================
-#  NFSMW Recomp - Lanzador
+#  NFSMW Recomp - Launcher
 #
-#  PowerShell + Windows Forms: los dos vienen con Windows, no hay nada que
-#  instalar. Se abre desde LANZADOR.bat.
+#  PowerShell + Windows Forms: both come with Windows, nothing to install.
+#  Opened from LANZADOR.bat.
 #
-#  Fijo, y por que:
-#    --readback_resolve=fast   sin esto la imagen sale lavada y el sol
-#                              reventado. Es un arreglo, no una preferencia.
-#    --gpu_plugin xenos        es el unico backend construido.
-#    --mnk_mode                teclado y raton ademas del mando.
-#    --gpu_backend=...         siempre, aunque coincida con el toml. Ver el
-#                              grupo "API grafica": es lo que impide quedarse
-#                              sin poder jugar tras elegir una API que no va.
-#
-#
-#  LAS DOS RESOLUCIONES, QUE NO SON LA MISMA
-#  =========================================
-#  Esto costo entenderlo y conviene dejarlo escrito.
-#
-#  --resolution  (SALIDA)
-#    Cambia el modo de video del guest -lo que VdQueryVideoMode le contesta al
-#    juego cuando pregunta que resolucion tiene la pantalla- y, de paso, el
-#    tamano de la ventana: Window::Create recibe 1280x720 pero solo como
-#    peticion, y ResolveWindowWidth/Height la pisan con este preset.
-#
-#    LO QUE NO HACE: obligar al juego a renderizar mas fino. Most Wanted, como
-#    casi todo juego de 360, dibuja en sus propios render targets de tamano
-#    fijo y deja que el escalador de la consola estire el resultado hasta el
-#    modo de video. Asi que subir esto agranda la imagen, no la mejora.
-#
-#  --resolution_scale  (RENDERIZADO)
-#    Esta si. Multiplica el tamano de los render targets y de la EDRAM
-#    emulada, asi que el juego dibuja de verdad el doble o el triple de
-#    pixeles. Es la escala de resolucion heredada de Xenia. Su descripcion en
-#    el propio SDK: "Draw resolution scale for both X and Y axes".
-#
-#    Cuesta cara en GPU y crece con el cuadrado: 2x son cuatro veces los
-#    pixeles. Si la tarjeta no puede con la escala pedida, el SDK la baja sola
-#    y lo deja escrito en el log ("reducing to NxN").
+#  Fixed, and why:
+#    --readback_resolve=fast   without this the image comes out washed out
+#                              and the sun blown out. It's a fix, not a
+#                              preference.
+#    --gpu_plugin xenos        it's the only backend that's built.
+#    --mnk_mode                keyboard and mouse in addition to the gamepad.
+#    --gpu_backend=...         always, even if it matches the toml. See the
+#                              "Graphics API" group: it's what keeps you from
+#                              losing the ability to play after picking an
+#                              API that doesn't work.
 #
 #
-#  VSYNC Y LIMITE DE FPS: NECESITAN EL PARCHE
-#  ==========================================
-#  De fabrica ninguno de los dos funciona:
+#  THE TWO RESOLUTIONS, WHICH ARE NOT THE SAME
+#  =============================================
+#  This took effort to understand and is worth writing down.
 #
-#    - "vsync" existe como cvar pero no sincroniza nada. Se lee en un solo
-#      sitio del SDK, y solo decide si el procesador de comandos duerme o gira
-#      en las esperas del guest. El Present del presentador de D3D12 llevaba
-#      el SyncInterval clavado a 0.
+#  --resolution  (OUTPUT)
+#    Changes the guest's video mode -what VdQueryVideoMode answers the game
+#    when it asks what resolution the screen has- and, incidentally, the
+#    window size: Window::Create receives 1280x720 but only as a request,
+#    and ResolveWindowWidth/Height override it with this preset.
 #
-#    - No habia ningun limitador de fps. Ninguno.
+#    WHAT IT DOESN'T DO: force the game to render at finer detail. Most
+#    Wanted, like almost every 360 game, draws into its own fixed-size
+#    render targets and lets the console's scaler stretch the result up to
+#    the video mode. So raising this makes the image bigger, not better.
 #
-#  tools\parche_presentador.py arregla las dos cosas. Si no esta aplicado,
-#  esta ventana lo avisa arriba en rojo.
+#  --resolution_scale  (RENDERING)
+#    This one does. It multiplies the size of the render targets and of the
+#    emulated EDRAM, so the game actually draws double or triple the
+#    pixels. It's the resolution scale inherited from Xenia. Its own
+#    description in the SDK: "Draw resolution scale for both X and Y axes".
+#
+#    It's expensive on the GPU and grows with the square: 2x is four times
+#    the pixels. If the card can't handle the requested scale, the SDK
+#    lowers it on its own and writes it to the log ("reducing to NxN").
+#
+#
+#  VSYNC AND FPS LIMIT: NEED THE PATCH
+#  ======================================
+#  Out of the box neither of the two works:
+#
+#    - "vsync" exists as a cvar but doesn't sync anything. It's read in a
+#      single spot in the SDK, and only decides whether the command
+#      processor sleeps or spins during guest waits. The D3D12 presenter's
+#      Present had SyncInterval hardcoded to 0.
+#
+#    - There was no fps limiter at all. None.
+#
+#  tools\parche_presentador.py fixes both things. If it isn't applied, this
+#  window warns about it in red at the top.
 # =============================================================================
 
 Set-StrictMode -Version Latest
@@ -62,30 +64,30 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
-# ---- Donde estamos ----------------------------------------------------------
+# ---- Where we are -----------------------------------------------------------
 #
-# Este script vive en DOS SITIOS y tiene que funcionar en los dos:
+# This script lives in TWO PLACES and has to work in both:
 #
-#   proyecto   NFSMW Recomp\tools\lanzador.ps1
-#              El ejecutable esta en app\out\build\win-amd64-release\, los
-#              logs y la configuracion cuelgan de la raiz del proyecto, y el
-#              fuente del SDK esta al lado, asi que se puede comprobar si el
-#              parche del presentador esta puesto.
+#   project    NFSMW Recomp\tools\lanzador.ps1
+#              The executable is at app\out\build\win-amd64-release\, the
+#              logs and the settings hang off the project root, and the SDK
+#              source sits right next to it, so it's possible to check
+#              whether the presenter patch is applied.
 #
-#   carpeta    build\lanzador.ps1  (junto a nfsmw.exe)
-#              Aqui no hay proyecto ni SDK: solo el juego. Todo -exe, ISO,
-#              logs, ajustes- vive en esta misma carpeta.
+#   folder     build\lanzador.ps1  (next to nfsmw.exe)
+#              Here there's no project or SDK: just the game. Everything
+#              -exe, ISO, logs, settings- lives in this same folder.
 #
-# Se distingue por lo mas fiable que hay: si el ejecutable esta AL LADO del
-# script, estamos en la carpeta repartible.
+# It's told apart by the most reliable thing there is: if the executable is
+# RIGHT NEXT TO the script, we're in the distributable folder.
 #
-# EL JUEGO SE LLAMA nfsmw.exe. Desde que existe Lanzador.exe, en build\ el
-# nombre NFS_Most_Wanted.exe lo lleva EL LANZADOR, para que al hacer doble
-# clic en el icono del juego salga la ventana de opciones. Buscar aqui el
-# nombre bonito haria que este script se lanzase a si mismo, en bucle.
+# THE GAME IS CALLED nfsmw.exe. Since Lanzador.exe exists, in build\ the name
+# NFS_Most_Wanted.exe is carried by THE LAUNCHER, so that double-clicking the
+# game's icon brings up the options window. Looking here for the pretty name
+# would make this script launch itself, in a loop.
 #
-# Se sigue aceptando el nombre viejo detras, para carpetas armadas antes del
-# cambio, donde NFS_Most_Wanted.exe todavia es el juego.
+# The old name is still accepted as a fallback, for folders that were put
+# together before the change, where NFS_Most_Wanted.exe is still the game.
 $JUEGO = $null
 foreach ($n in @('nfsmw.exe', 'NFS_Most_Wanted.exe')) {
     $c = Join-Path $PSScriptRoot $n
@@ -98,8 +100,9 @@ if ($DISTRIBUIDA) {
     $EXE     = $JUEGO
     $LOGDIR  = Join-Path $PSScriptRoot 'logs'
     $AJUSTES = Join-Path $PSScriptRoot 'lanzador.json'
-    # No hay SDK que mirar. Y no hace falta: la carpeta repartible se arma con
-    # el target dist, que solo existe en un arbol donde el parche ya esta.
+    # No SDK to check. And there's no need to: the distributable folder is
+    # built from the dist target, which only exists in a tree where the
+    # patch is already applied.
     $FUENTE_PRESENTADOR = $null
 } else {
     $RAIZ    = Split-Path -Parent $PSScriptRoot
@@ -110,8 +113,8 @@ if ($DISTRIBUIDA) {
 }
 $RUNLOG  = Join-Path $LOGDIR 'lanzador.log'
 
-# Presets que el SDK sabe interpretar, sacados de TryParseResolutionPreset en
-# include/rex/graphics/video_mode_util.h. Ademas acepta "ANCHOxALTO".
+# Presets the SDK knows how to parse, taken from TryParseResolutionPreset in
+# include/rex/graphics/video_mode_util.h. It also accepts "WIDTHxHEIGHT".
 $PRESETS = [ordered]@{
     '480p  - 640 x 480'    = '480p'
     '540p  - 960 x 540'    = '540p'
@@ -136,16 +139,17 @@ $defectos = @{
     ancho    = 1280
     alto     = 720
     escala   = '1x  - nativa del juego'
-    pantalla = $true     # el SDK arranca en pantalla completa por defecto
+    pantalla = $true     # the SDK starts in fullscreen by default
     vsync    = $false
     limitar  = $false
     fps      = 60
-    # 'auto' = no pasar nada y dejar que mande nfsmw.toml, que trae "rtv".
-    # Sin el toml, 'auto' significa que decide el SDK: ROV en Intel, RTV en el
-    # resto. Que es justo la decision por marca que queremos poder saltarnos.
+    # 'auto' = don't pass anything and let nfsmw.toml take charge, which
+    # ships with "rtv". Without the toml, 'auto' means the SDK decides: ROV
+    # on Intel, RTV everywhere else. Which is exactly the per-vendor
+    # decision we want to be able to bypass.
     video    = 'auto'
-    # La API grafica. AQUI NO HAY 'auto' A PROPOSITO, y es lo que hace que esta
-    # ventana sea una salida de emergencia: ver el comentario del grupo.
+    # The graphics API. THERE IS NO 'auto' HERE ON PURPOSE, and that's what
+    # makes this window an emergency exit: see the group's comment.
     api      = 'd3d12'
 }
 
@@ -158,7 +162,7 @@ function Cargar-Ajustes {
                 if ($j.PSObject.Properties.Name -contains $k) { $a[$k] = $j.$k }
             }
         } catch {
-            # Un json corrupto no debe impedir abrir el lanzador.
+            # A corrupt json shouldn't prevent the launcher from opening.
         }
     }
     return $a
@@ -172,17 +176,17 @@ function Guardar-Ajustes($a) {
         }
         $a | ConvertTo-Json | Set-Content -LiteralPath $AJUSTES -Encoding UTF8
     } catch {
-        # Guardar preferencias es un lujo, no una condicion para jugar.
+        # Saving preferences is a nice-to-have, not a condition for playing.
     }
 }
 
-# Mira el FUENTE del SDK, no el DLL: es donde vive la verdad y es barato de
-# comprobar. Si esta parcheado pero sin recompilar, el aviso de abajo lo dice.
+# Checks the SDK SOURCE, not the DLL: that's where the truth lives and it's
+# cheap to check. If it's patched but not recompiled, the warning below says so.
 function Parche-Aplicado {
-    # En la carpeta repartible no hay fuente que mirar, pero tampoco duda: esa
-    # carpeta se arma desde un arbol ya parcheado. Devolver $null ahi solo
-    # serviria para ensenarle a quien la recibe un aviso sobre un SDK que no
-    # tiene delante.
+    # In the distributable folder there's no source to check, but there's no
+    # doubt either: that folder is built from a tree that's already patched.
+    # Returning $null there would only show whoever receives it a warning
+    # about an SDK they don't have in front of them.
     if ($DISTRIBUIDA) { return $true }
     if (-not $FUENTE_PRESENTADOR) { return $null }
     if (-not (Test-Path -LiteralPath $FUENTE_PRESENTADOR)) { return $null }
@@ -197,7 +201,7 @@ function Parche-Aplicado {
 $cfg = Cargar-Ajustes
 
 # =============================================================================
-#  Ventana
+#  Window
 # =============================================================================
 $form                 = New-Object System.Windows.Forms.Form
 $form.Text            = 'NFS Most Wanted - Recompilacion'
@@ -243,7 +247,7 @@ $gIso.Controls.Add($btnIso)
 [void](Nueva-Nota $gIso 12 52 494 18 `
     'Se lee al vuelo: no se copia nada a disco, asi que tiene que seguir ahi.')
 
-# ---- Pantalla ---------------------------------------------------------------
+# ---- Screen -----------------------------------------------------------------
 $gPant = Nuevo-Grupo 'Pantalla y resolucion' 92 210
 
 $rbVentana          = New-Object System.Windows.Forms.RadioButton
@@ -260,7 +264,7 @@ $gPant.Controls.Add($rbCompleta)
 
 if ([bool]$cfg.pantalla) { $rbCompleta.Checked = $true } else { $rbVentana.Checked = $true }
 
-# Salida
+# Output
 $lblSalida          = New-Object System.Windows.Forms.Label
 $lblSalida.Text     = 'Salida'
 $lblSalida.Location = New-Object System.Drawing.Point(14, 54)
@@ -277,7 +281,7 @@ $gPant.Controls.Add($cboRes)
 $numAncho          = New-Object System.Windows.Forms.NumericUpDown
 $numAncho.Location = New-Object System.Drawing.Point(330, 51)
 $numAncho.Size     = New-Object System.Drawing.Size(70, 22)
-$numAncho.Minimum  = 640        # limites que aplica el propio SDK
+$numAncho.Minimum  = 640        # limits enforced by the SDK itself
 $numAncho.Maximum  = 4095
 $numAncho.Value    = [int]$cfg.ancho
 $gPant.Controls.Add($numAncho)
@@ -300,7 +304,7 @@ $gPant.Controls.Add($numAlto)
     ("Tamano de la ventana y de la imagen final. NO hace que el juego dibuje " +
      "mas fino: solo estira lo que ya dibuja."))
 
-# Renderizado
+# Rendering
 $lblEsc          = New-Object System.Windows.Forms.Label
 $lblEsc.Text     = 'Renderizado'
 $lblEsc.Location = New-Object System.Drawing.Point(14, 116)
@@ -320,7 +324,7 @@ $gPant.Controls.Add($cboEsc)
      "los pixeles). Si la grafica no puede, el SDK la baja sola y lo apunta " +
      "en el log."))
 
-# ---- Fotogramas -------------------------------------------------------------
+# ---- Frames -----------------------------------------------------------------
 $gFps = Nuevo-Grupo 'Fotogramas' 310 130
 
 $chkVsync          = New-Object System.Windows.Forms.CheckBox
@@ -358,12 +362,13 @@ $gFps.Controls.Add($lblFps)
     ("Limitador de verdad, dentro del presentador: duerme hasta que toca el " +
      "siguiente fotograma. Util para que la GPU no vaya a tope sin motivo."))
 
-# ---- Motor de video ---------------------------------------------------------
+# ---- Video engine -----------------------------------------------------------
 #
-# La Xbox 360 no tiene render targets normales: tiene 10 MB de memoria embebida
-# -la EDRAM- donde el hardware fijo hace la mezcla y el test de profundidad.
-# Emular eso se puede de dos formas, y no son equivalentes ni en velocidad ni
-# en exactitud. Ver nfsmw.toml, que lo cuenta entero.
+# The Xbox 360 doesn't have normal render targets: it has 10 MB of embedded
+# memory -the EDRAM- where the fixed-function hardware does blending and
+# depth testing. Emulating that can be done in two ways, and they're not
+# equivalent in either speed or accuracy. See nfsmw.toml, which explains it
+# in full.
 $gVideo = Nuevo-Grupo 'Motor de video (emulacion de la EDRAM)' 444 88
 
 $rbVidAuto          = New-Object System.Windows.Forms.RadioButton
@@ -395,26 +400,27 @@ switch ([string]$cfg.video) {
      "graficas integradas, pero en algunas deja una franja horizontal rara. " +
      "Exacto se ve bien siempre y va bastante mas lento."))
 
-# ---- API grafica ------------------------------------------------------------
+# ---- Graphics API -----------------------------------------------------------
 #
-# ESTE GRUPO ES UNA SALIDA DE EMERGENCIA, Y POR ESO NO TIENE 'AUTOMATICO'
-# =======================================================================
-# gpu_backend tambien se puede cambiar desde el menu de F4, dentro del juego.
-# El problema es que si eliges una API que en tu equipo da pantalla negra,
-# guardas y reinicias, el valor se queda escrito en nfsmw.toml y ya no hay
-# forma de volver: para cambiarlo necesitas el menu, y para llegar al menu
-# necesitas ver algo. Eso paso, y por eso existe esta ventana.
+# THIS GROUP IS AN EMERGENCY EXIT, AND THAT'S WHY IT HAS NO 'AUTOMATIC'
+# =====================================================================
+# gpu_backend can also be changed from the F4 menu, inside the game. The
+# problem is that if you pick an API that gives you a black screen on your
+# machine, save, and restart, the value stays written in nfsmw.toml and
+# there's no way back: to change it you need the menu, and to reach the menu
+# you need to see something. That happened, and that's why this window
+# exists.
 #
-# La regla que lo arregla es del propio SDK: en el orden de prioridad de los
-# cvars la linea de comandos manda sobre el archivo de configuracion
-# -kDefault < kConfig < kEnvironment < kCommandLine < kRuntime-. Asi que si el
-# lanzador pasa SIEMPRE --gpu_backend, lo que haya en el toml da igual: la
-# ventana siempre gana.
+# The rule that fixes it comes from the SDK itself: in the cvar priority
+# order the command line outranks the config file
+# -kDefault < kConfig < kEnvironment < kCommandLine < kRuntime-. So if the
+# launcher ALWAYS passes --gpu_backend, whatever is in the toml doesn't
+# matter: the window always wins.
 #
-# Por eso aqui no hay opcion 'automatico'. Un automatico que no pase nada
-# dejaria mandar otra vez al toml, que es justo el agujero por el que uno se
-# queda fuera. En 'Motor de video', que no puede dejar el juego invisible, si
-# tiene sentido.
+# That's why there's no 'automatic' option here. An automatic that passes
+# nothing would let the toml take charge again, which is exactly the hole
+# people fall through. In 'Video engine', which can't leave the game
+# invisible, it does make sense.
 $gApi = Nuevo-Grupo 'API grafica' 540 86
 
 $rbApiDx          = New-Object System.Windows.Forms.RadioButton
@@ -436,14 +442,14 @@ if ([string]$cfg.api -eq 'vulkan') { $rbApiVk.Checked = $true } else { $rbApiDx.
      "graficas Intel puede salir en negro; si pasa, vuelve aqui y marca " +
      "DirectX 12, que esta ventana manda sobre nfsmw.toml."))
 
-# ---- Aviso del parche -------------------------------------------------------
+# ---- Patch warning ----------------------------------------------------------
 $lblParche           = New-Object System.Windows.Forms.Label
 $lblParche.Location  = New-Object System.Drawing.Point(14, 632)
 $lblParche.Size      = New-Object System.Drawing.Size(516, 32)
 $lblParche.ForeColor = [System.Drawing.Color]::Firebrick
 $form.Controls.Add($lblParche)
 
-# ---- Linea de comandos ------------------------------------------------------
+# ---- Command line -----------------------------------------------------------
 $gCmd = Nuevo-Grupo 'Lo que se va a ejecutar' 668 86
 
 $txtCmd            = New-Object System.Windows.Forms.TextBox
@@ -456,7 +462,7 @@ $txtCmd.BackColor  = [System.Drawing.Color]::WhiteSmoke
 $txtCmd.Font       = New-Object System.Drawing.Font('Consolas', 8)
 $gCmd.Controls.Add($txtCmd)
 
-# ---- Botones ----------------------------------------------------------------
+# ---- Buttons ----------------------------------------------------------------
 $btnJugar          = New-Object System.Windows.Forms.Button
 $btnJugar.Text     = 'JUGAR'
 $btnJugar.Location = New-Object System.Drawing.Point(300, 766)
@@ -477,7 +483,7 @@ $lblEstado.ForeColor = [System.Drawing.Color]::DimGray
 $form.Controls.Add($lblEstado)
 
 # =============================================================================
-#  Logica
+#  Logic
 # =============================================================================
 
 function Salida-Elegida {
@@ -503,9 +509,9 @@ function Construir-Argumentos {
     $a.Add('--mnk_mode')
     $a.Add('--readback_resolve=fast')
 
-    # SIEMPRE, incluso cuando coincide con lo que ya dice el toml. Es lo que
-    # convierte esta ventana en la salida de emergencia: pasandolo aqui, un
-    # gpu_backend malo guardado desde F4 no puede dejar el juego invisible.
+    # ALWAYS, even when it matches what the toml already says. This is what
+    # turns this window into the emergency exit: by passing it here, a bad
+    # gpu_backend saved from F4 can't leave the game invisible.
     $a.Add('--gpu_backend={0}' -f $(if ($rbApiVk.Checked) { 'vulkan' } else { 'd3d12' }))
 
     $a.Add('--resolution {0}' -f (Salida-Elegida))
@@ -517,9 +523,9 @@ function Construir-Argumentos {
     if ($chkVsync.Checked)   { $a.Add('--vsync=true') }       else { $a.Add('--vsync=false') }
     if ($chkLimite.Checked)  { $a.Add('--max_fps {0}' -f [int]$numFps.Value) }
 
-    # Solo se pasa si se ha elegido a mano. En automatico no se pone nada, y
-    # asi lo que valga en nfsmw.toml sigue mandando: los argumentos de la
-    # linea de comandos pisan al archivo de configuracion, no al reves.
+    # Only passed if it's been chosen by hand. In automatic nothing is set,
+    # so whatever nfsmw.toml has keeps ruling: command-line arguments
+    # override the config file, not the other way around.
     if ($rbVidRtv.Checked) { $a.Add('--render_target_path_d3d12=rtv') }
     if ($rbVidRov.Checked) { $a.Add('--render_target_path_d3d12=rov') }
 
@@ -580,7 +586,7 @@ $btnJugar.Add_Click({
         return
     }
 
-    # Guardar antes de lanzar: si el juego revienta, las preferencias se quedan.
+    # Save before launching: if the game crashes, the preferences still stick.
     Guardar-Ajustes @{
         iso      = $txtIso.Text
         preset   = [string]$cboRes.SelectedItem
@@ -619,7 +625,7 @@ $btnJugar.Add_Click({
     $btnJugar.Enabled = $true
     $lblEstado.Text   = ''
 
-    # Si se pidio escala y la grafica no pudo, el SDK la baja y lo deja escrito.
+    # If a scale was requested and the GPU couldn't do it, the SDK lowers it and writes it down.
     if (Test-Path -LiteralPath $RUNLOG) {
         $bajada = Select-String -LiteralPath $RUNLOG -SimpleMatch `
                     -Pattern 'draw resolution scale is not supported' |
@@ -646,7 +652,7 @@ $btnJugar.Add_Click({
     }
 })
 
-# ---- Estado inicial ---------------------------------------------------------
+# ---- Initial state ----------------------------------------------------------
 $idx = $cboRes.Items.IndexOf([string]$cfg.preset)
 if ($idx -lt 0) { $idx = $cboRes.Items.IndexOf('720p  - 1280 x 720') }
 if ($idx -lt 0) { $idx = 0 }
