@@ -850,3 +850,13 @@
 "0x823EB848" = { }
 "0x823EB838" = { }
 "0x823EB828" = { }
+
+# --- thunk table 0x824B1608-0x824B16A8: five identical 32-byte member-pointer
+# call thunks selected by index (a computed target, invisible to any pointer scan),
+# then a small loop function at 0x824B16A8. Crashed at 0x824B1608, 0x824B1640 and
+# 0x824B1668 (mid-Bull race) one entry at a time.
+"0x824B1628" = { }
+"0x824B1648" = { }
+"0x824B1668" = { }
+"0x824B1688" = { }
+"0x824B16A8" = { }
