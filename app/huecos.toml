@@ -1,11 +1,11 @@
 # ============================================================================
-#  Huecos de codigo - GENERADO para el XEX PAL ENG 454107D9 (entry 0x8262E9A8).
-#  Regenerar: rexglue codegen && python3 /tmp/opencode/fix_huecos.py
+#  Code gaps - GENERATED for the XEX PAL ENG 454107D9 (entry 0x8262E9A8).
+#  Regenerate: rexglue codegen && python3 /tmp/opencode/fix_huecos.py
 #
-#  Un hueco es el tramo entre el final calculado de una funcion y el inicio
-#  de la siguiente. Dos tipos:
-#  1) FUNCION SUELTA -> "0xHUECO" = { }
-#  2) CONTINUACION   -> "0xPADRE" = { end = 0xFIN }
+#  A gap is the span between the computed end of one function and the start
+#  of the next. Two types:
+#  1) STANDALONE FUNCTION -> "0xGAP" = { }
+#  2) CONTINUATION        -> "0xPARENT" = { end = 0xEND }
 # ============================================================================
 
 [functions]
@@ -821,9 +821,9 @@
 "0x828C5E00" = { }
 
 
-# reanalisis
+# reanalysis
 
-# --- SONDEO: destinos de llamada indirecta, aparecen al ejecutar ---
+# --- PROBE: indirect call targets, appear at runtime ---
 "0x826BE2A8" = { }
 "0x8285CBE0" = { }
 "0x824EDADC" = { }
@@ -832,7 +832,7 @@
 "0x826E7340" = { }
 "0x826DA9E4" = { }
 
-# --- SONDEO: destinos de llamada indirecta, aparecen al ejecutar ---
+# --- PROBE: indirect call targets, appear at runtime ---
 "0x82192ED8" = { }
 "0x823EB7F0" = { }
 "0x8216A2B8" = { }
