@@ -19,6 +19,7 @@
 
 #include "nfsmw_menu.h"
 
+#include <rex/chrono/clock.h>       // CP WATCHDOG - host ticks for idle_for/vblank_age
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
 #include <rex/logging.h>
@@ -468,6 +469,38 @@ class NfsmwApp : public rex::ReXApp {
   }
 
   // ==========================================================================
+  //  cp: phase=... - the command processor worker thread's current stage
+  //  (see rex::graphics::CommandProcessor::Phase) plus how long it's been
+  //  there and how long since the last vblank. Printed alongside the
+  //  watchdog's periodic snapshot and its "stopped" report - both places
+  //  that already dump the guest threads' registers, so this adds the one
+  //  thread the guest can't see: the GPU's.
+  // ==========================================================================
+  void ImprimeFaseCp(bool grave) const {
+    auto* gs = runtime() ? runtime()->graphics_system() : nullptr;
+    if (!gs) {
+      return;
+    }
+    const uint64_t ahora = rex::chrono::Clock::QueryHostTickCount();
+    const uint64_t freq = rex::chrono::Clock::QueryHostTickFrequency();
+    auto edad_ms = [&](uint64_t marca) -> std::string {
+      if (!marca || !freq) {
+        return std::string("n/a");
+      }
+      return fmt::format("{:.0f}ms", double(ahora - marca) * 1000.0 / double(freq));
+    };
+    const std::string idle_for = edad_ms(gs->cp_last_activity_tick());
+    const std::string vblank_age = edad_ms(gs->last_vblank_tick());
+    if (grave) {
+      REXLOG_ERROR("[vigilante] cp: phase={} idle_for={} vblank_age={}", gs->cp_phase_name(),
+                   idle_for, vblank_age);
+    } else {
+      REXLOG_DEBUG("[vigilante] cp: phase={} idle_for={} vblank_age={}", gs->cp_phase_name(),
+                   idle_for, vblank_age);
+    }
+  }
+
+  // ==========================================================================
   //  4. HANG WATCHDOG
   //
   //  THE PROBLEM IT SOLVES
@@ -826,6 +859,7 @@ class NfsmwApp : public rex::ReXApp {
         desde_instantanea = 0;
         REXLOG_DEBUG("[vigilante] instantanea: {} hilos del juego", hilos.size());
         VolcarHilos(hilos, false);
+        ImprimeFaseCp(false);
       }
 
       if (firma != firma_anterior) {
@@ -849,6 +883,7 @@ class NfsmwApp : public rex::ReXApp {
                    "del juego. Esto no es lentitud: esta parado.",
                    quietos, hilos.size());
       VolcarHilos(hilos, true);
+      ImprimeFaseCp(true);
       avisado = true;
     }
   }
