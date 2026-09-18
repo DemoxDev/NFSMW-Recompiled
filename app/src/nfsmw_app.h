@@ -430,20 +430,12 @@ class NfsmwApp : public rex::ReXApp {
   //  average is needed: the interval is real.
   // ==========================================================================
   rex::ui::FrameStats MideFotogramas(double dt_s) {
-#if REX_PLATFORM_SWITCH
-    // No presenter with the null backend; it counts the guest's swaps itself.
-    if (dt_s <= 0.0) {
-      return stats_;
-    }
-    const uint64_t ahora = rex::graphics::null::NullGraphicsSystem::swap_count();
-#else
     const auto* presentador =
         runtime() && runtime()->graphics_system() ? runtime()->graphics_system()->presenter() : nullptr;
     if (!presentador || dt_s <= 0.0) {
       return stats_;
     }
     const uint64_t ahora = presentador->guest_frames_refreshed();
-#endif
     const uint64_t nuevos = ahora - fotogramas_previos_;
     fotogramas_previos_ = ahora;
 

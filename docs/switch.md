@@ -6,7 +6,7 @@ and linked against libnx.
 
 ## Status
 
-**Experimental. The game runs, but nothing is drawn yet.**
+**Experimental. The game runs and renders through Vulkan.**
 
 | Area | State |
 |---|---|
@@ -15,11 +15,16 @@ and linked against libnx.
 | Controller | Working (Joy-Con / Pro Controller, player 1) |
 | Audio | Working (audout, stereo downmix) |
 | Saves | Written to `saves/` next to the .nro |
-| **Graphics** | **Not yet.** The GPU is emulated by the *null* backend: the command processor runs, vblank and GPU interrupts fire, so the game logic runs, but no frame is rendered. The screen shows a status console instead: guest fps, frames, RAM, and the log tail. |
+| **Graphics** | **Vulkan through NXVK, experimental.** |
 
-Why no graphics: the PC builds translate the Xbox 360 GPU to Vulkan or D3D12,
-and Switch homebrew has neither. A deko3d or OpenGL (Mesa) backend is the next
-piece of work; it is a port of the whole Xenos backend, not a small patch.
+Graphics: the PC builds translate the Xbox 360 GPU to Vulkan or D3D12; Switch
+homebrew now runs the same Vulkan backend unmodified (`src/graphics/vulkan`,
+`src/ui/vulkan` in the SDK), linked against NXVK
+(<https://github.com/PalindromicBreadLoaf/nxvk>), Mesa's NVK Vulkan driver
+ported to Horizon OS. No new GPU backend was written. NXVK is a very young
+driver, so device creation or presentation may still fail on some setups;
+`--gpu_backend=null` keeps the old status-console fallback (no rendering)
+available for that case.
 
 Performance expectations: the Linux build uses about 2.3 Zen 4 cores at 60 fps.
 The Switch has three usable Cortex-A57 cores at 1 GHz, roughly 8-10 times slower
@@ -60,6 +65,13 @@ sdmc:/switch/nfsmw-recomp/
 
 `game/` and `saves/` are the only folders you need to care about. Back up
 `saves/` if you care about your progress.
+
+With Vulkan rendering, `game/` now shares the same VRAM budget concerns as
+the PC builds: the Tegra X1 has no dedicated video memory, so textures and
+render targets are carved out of the same system RAM as guest memory and
+NXVK's own allocations (see Building below). Watch the RAM figure in the
+perf overlay (`--perf_overlay`) if a texture pack or higher-resolution asset
+swap starts pushing that budget.
 
 ## Launching it
 
@@ -105,6 +117,27 @@ Needs, on a Linux PC:
 - clang 18+, CMake 3.28+, Ninja, Python 3 (same as the Linux build).
 - The ReXGlue SDK checked out next to this repository, and
   `assets/default.xex` extracted as for the PC build.
+- NXVK installed into that same `DEVKITPRO` prefix (below) — the Vulkan
+  backend links against it.
+
+### Installing NXVK
+
+The SDK's Vulkan backend links against NXVK
+(<https://github.com/PalindromicBreadLoaf/nxvk>), Mesa's NVK driver for
+Horizon OS. It is not part of devkitPro and has to be built and installed
+once, before `tools/build_switch.sh` can link:
+
+```sh
+git clone https://github.com/PalindromicBreadLoaf/nxvk
+cd nxvk
+make image   # builds the aarch64/newlib cross build image; needs podman or docker
+make
+DEVKITPRO=<your devkitpro> make install   # e.g. DEVKITPRO=~/devkitpro; no sudo needed if you own that directory
+```
+
+Licensing: NXVK's own files are GPL-2.0-or-later, this app is GPL-3.0, and
+the ReXGlue SDK is BSD-3-Clause — all three are compatible in the same
+binary.
 
 Then:
 
@@ -150,10 +183,10 @@ under `REX_PLATFORM_SWITCH`:
 | Faults | `src/core/exception_handler_switch.cpp`, `platform/switch_exception_entry.S` | resumable user-exception entry, for the MMIO fallback |
 | Threads | `src/core/threading_posix.cpp` | libnx pthreads; suspend with `svcSetThreadActivity`, priority/affinity with svcs; guest threads at 0x3B (the time-sliced priority) |
 | Fibers | `src/core/fiber_switch.cpp` | hand-written context switch |
-| UI loop | `src/ui/windowed_app_context_switch.cpp` | applet loop and the status console |
+| UI loop | `src/ui/windowed_app_context_switch.cpp` | applet loop; paints through the presenter with `gpu_backend=vulkan`, falls back to the status console with `gpu_backend=null` |
 | Input / audio | `src/input/nx/`, `src/audio/nx/` | libnx pad and audout |
-| GPU | `src/graphics/null/` | the null backend, linked statically |
+| GPU | `src/graphics/vulkan/`, `src/ui/vulkan/` | the existing Vulkan backend, linked against NXVK; `src/graphics/null/` remains as the no-rendering fallback |
 
 Not done: CPU write-watch for GPU caches (memory protection is only recorded,
-see `memory_switch.cpp`), a real GPU backend, and guest SEH scopes (a fault
+see `memory_switch.cpp`), and guest SEH scopes (a fault
 inside one is fatal; NFSMW has none).
