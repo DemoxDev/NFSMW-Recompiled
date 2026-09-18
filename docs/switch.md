@@ -184,6 +184,28 @@ Eden (and other yuzu descendants) load the .nro directly:
 Emulators don't pass argv to a directly loaded .nro; the build falls back to
 `sdmc:/switch/nfsmw-recomp/`, so keep that exact path.
 
+## Live logs and upload over WiFi
+
+hbmenu can also receive the .nro over the network instead of from the SD card
+(press **Y** in hbmenu for netloader mode), sent from the PC with `nxlink`.
+This is also the one way to pass command-line arguments on this platform (see
+"no command-line flags" above, which is true for a normal SD-card launch):
+
+```sh
+nxlink -s build/switch/nfsmw-recomp/nfsmw-recomp.nro -- \
+  --game_data_root=/switch/nfsmw-recomp/game --user_data_root=/switch/nfsmw-recomp/saves
+```
+
+The two arguments are needed because hbmenu stores a netloader-uploaded .nro
+somewhere other than next to `game/`, so the app can't find its data by
+looking beside itself the way it does for a normal SD-card launch. Paths
+starting with `/` resolve on the SD card, so these still point at the usual
+`sdmc:/switch/nfsmw-recomp/game` and `saves/`.
+
+Once nxlink is connected, the app redirects stdout/stderr to it, so the same
+lines that go to `logs/nfsmw_NNN.log` on the SD card also stream live to the
+terminal that ran `nxlink` - no need to pull the SD card to read a crash log.
+
 ## How the port works
 
 For whoever picks up the renderer. Everything platform-specific is in the SDK
