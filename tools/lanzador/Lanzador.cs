@@ -1230,14 +1230,21 @@ namespace NfsmwRecomp
 
             txtIso.Text = Cadena(a, "iso", "");
 
-            int i = IndiceDe(cboRes, Cadena(a, "preset", "720p  - 1280 x 720"));
-            cboRes.SelectedIndex = i >= 0 ? i : 2;
+            // Por defecto 1080p + x2, no 720p + x1: es lo mismo que ya trae
+            // nfsmw.toml de fabrica (video_mode 1920x1080, resolution_scale
+            // 2 -"recomendado" segun su propio comentario-), asi que alguien
+            // que abre el lanzador por primera vez, sin lanzador.json todavia,
+            // ve la MISMA calidad que tendria arrancando nfsmw.exe a pelo. Sin
+            // esto el lanzador rebajaba la resolucion real de 1080p a 720p sin
+            // que nadie lo pidiera, solo por no coincidir con el toml.
+            int i = IndiceDe(cboRes, Cadena(a, "preset", "1080p - 1920 x 1080"));
+            cboRes.SelectedIndex = i >= 0 ? i : 4;
 
-            numAncho.Value = Acotar(numAncho, Entero(a, "ancho", 1280));
-            numAlto.Value = Acotar(numAlto, Entero(a, "alto", 720));
+            numAncho.Value = Acotar(numAncho, Entero(a, "ancho", 1920));
+            numAlto.Value = Acotar(numAlto, Entero(a, "alto", 1080));
 
-            int e = IndiceDe(cboEsc, Cadena(a, "escala", "1x  - nativa del juego"));
-            cboEsc.SelectedIndex = e >= 0 ? e : 0;
+            int e = IndiceDe(cboEsc, Cadena(a, "escala", "x2  - 4 veces los pixeles"));
+            cboEsc.SelectedIndex = e >= 0 ? e : 1;
 
             int mo = IndiceDe(cboMon, Cadena(a, "monitor", "Automatico (predeterminado)"));
             cboMon.SelectedIndex = mo >= 0 ? mo : 0;
