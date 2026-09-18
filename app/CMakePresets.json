@@ -116,6 +116,18 @@
             "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
         },
         {
+            "name": "switch-release",
+            "displayName": "Nintendo Switch homebrew (.nro) Release",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/out/build/${presetName}",
+            "toolchainFile": "${sourceDir}/../../rexglue-sdk/cmake/toolchains/switch-clang.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS_RELEASE": "-O2 -DNDEBUG",
+                "REXSDK_DIR": "${sourceDir}/../../rexglue-sdk"
+            }
+        },
+        {
             "name": "win-arm64-debug",
             "displayName": "Windows ARM64 Debug",
             "inherits": "windows-arm64-base",
@@ -195,6 +207,7 @@
         { "name": "linux-amd64-debug", "configurePreset": "linux-amd64-debug" },
         { "name": "linux-amd64-release", "configurePreset": "linux-amd64-release" },
         { "name": "linux-amd64-relwithdebinfo", "configurePreset": "linux-amd64-relwithdebinfo" },
+        { "name": "switch-release", "configurePreset": "switch-release" },
         { "name": "win-arm64-debug", "configurePreset": "win-arm64-debug" },
         { "name": "win-arm64-release", "configurePreset": "win-arm64-release" },
         { "name": "win-arm64-relwithdebinfo", "configurePreset": "win-arm64-relwithdebinfo" },

@@ -8,6 +8,21 @@ project(nfsmw LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Nintendo Switch homebrew: the code generator is a host program, so the
+# cross build runs the one from the host SDK install. Build that first
+# (docs/switch.md); the generated sources are shared with the PC builds.
+if(NINTENDO_SWITCH)
+    set(NFSMW_HOST_REXGLUE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../rexglue-sdk/out/install/linux-amd64/bin/rexglue"
+        CACHE FILEPATH "Host rexglue executable used to run the code generator")
+    if(NOT EXISTS "${NFSMW_HOST_REXGLUE}")
+        message(FATAL_ERROR "Host rexglue not found at ${NFSMW_HOST_REXGLUE}. Build and install "
+                            "the SDK for the host first, or set NFSMW_HOST_REXGLUE.")
+    endif()
+    add_executable(rex::rexglue IMPORTED)
+    set_target_properties(rex::rexglue PROPERTIES IMPORTED_LOCATION "${NFSMW_HOST_REXGLUE}")
+endif()
+
 include(generated/rexglue.cmake)
 
 # Sources
@@ -37,6 +52,53 @@ endif()
 # Since src/nfsmw_app.h sets gpu_plugin=xenos by default, the --gpu_plugin
 # argument is no longer required; it can still be passed to change it.
 rexglue_setup_target(nfsmw GPU_PLUGINS xenos)
+
+# =============================================================================
+#  NINTENDO SWITCH - nfsmw-recomp.nro and the folder that goes on the SD card
+#
+#      build/switch/nfsmw-recomp/   ->   sdmc:/switch/nfsmw-recomp/
+#
+#  The game data is not part of it: the user extracts their own copy into
+#  game/ next to the .nro. See docs/switch.md.
+# =============================================================================
+if(NINTENDO_SWITCH)
+    set_target_properties(nfsmw PROPERTIES OUTPUT_NAME "nfsmw-recomp" SUFFIX ".elf")
+    # Where the app looks for its folder when the loader passes no argv
+    # (emulators); hbmenu passes the real path.
+    target_compile_definitions(rexcore PRIVATE
+        REX_SWITCH_DEFAULT_APP_PATH="/switch/nfsmw-recomp/nfsmw-recomp.nro")
+
+    set(NFSMW_SWITCH_ICON "${NX_DEFAULT_ICON}" CACHE FILEPATH "256x256 JPEG icon for hbmenu")
+    set(NFSMW_NACP "${CMAKE_CURRENT_BINARY_DIR}/nfsmw-recomp.nacp")
+    set(NFSMW_NRO "${CMAKE_CURRENT_BINARY_DIR}/nfsmw-recomp.nro")
+    add_custom_command(
+        OUTPUT "${NFSMW_NACP}"
+        COMMAND "${NX_NACPTOOL}" --create "NFS Most Wanted Recompiled" "NFSMW Recompiled"
+                "0.0.2" "${NFSMW_NACP}"
+        VERBATIM)
+    add_custom_command(
+        OUTPUT "${NFSMW_NRO}"
+        COMMAND "${NX_ELF2NRO}" "$<TARGET_FILE:nfsmw>" "${NFSMW_NRO}"
+                "--nacp=${NFSMW_NACP}" "--icon=${NFSMW_SWITCH_ICON}"
+        DEPENDS nfsmw "${NFSMW_NACP}" "${NFSMW_SWITCH_ICON}"
+        COMMENT "Packing nfsmw-recomp.nro"
+        VERBATIM)
+    add_custom_target(nfsmw_nro ALL DEPENDS "${NFSMW_NRO}")
+
+    if(NOT DEFINED NFSMW_SWITCH_DIST_DIR)
+        set(NFSMW_SWITCH_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/switch/nfsmw-recomp")
+    endif()
+    add_custom_target(switch_dist
+        DEPENDS nfsmw_nro
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${NFSMW_SWITCH_DIST_DIR}/game"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${NFSMW_NRO}" "${NFSMW_SWITCH_DIST_DIR}/"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${CMAKE_CURRENT_SOURCE_DIR}/../packaging/switch/README.txt"
+                "${NFSMW_SWITCH_DIST_DIR}/"
+        COMMENT "Assembling the SD card folder in ${NFSMW_SWITCH_DIST_DIR}"
+        VERBATIM)
+    return()
+endif()
 
 # Native Qt launcher (Linux). Used by packaging/appimage/.
 option(NFSMW_BUILD_LAUNCHER "Build the native Qt launcher" ON)

@@ -33,6 +33,14 @@
 
 #include <imgui.h>  // PERF OVERLAY
 
+#if REX_PLATFORM_SWITCH
+#include <malloc.h>
+#include <switch.h>
+#include <rex/graphics/null/graphics_system.h>  // frames counted without a presenter
+#include <rex/runtime.h>
+#include <rex/ui/windowed_app_context_switch.h>
+#endif
+
 REXCVAR_DEFINE_BOOL(perf_overlay, false, "UI",
                     "MangoHud-style performance overlay in the top-left corner: guest FPS, "
                     "frame time, process CPU and memory. Updates once per second.");
@@ -101,6 +109,30 @@ class NfsmwApp : public rex::ReXApp {
   //  NFS_Most_Wanted.iso works unambiguously even if there are more images.
   // ==========================================================================
   void OnConfigurePaths(rex::PathConfig& paths) override {
+#if REX_PLATFORM_SWITCH
+    // Switch: everything lives next to the .nro on the SD card. The game is an
+    // extracted folder (FAT32 cards can't hold the ISO, and ISOs aren't
+    // mounted on this platform); saves go to saves/ like tools/run.sh does.
+    {
+      std::error_code ec;
+      const auto carpeta = rex::filesystem::GetExecutableFolder();
+      if (paths.game_data_root.empty()) {
+        for (const char* nombre : {"game", "game_root"}) {
+          if (std::filesystem::is_directory(carpeta / nombre, ec)) {
+            paths.game_data_root = carpeta / nombre;
+            break;
+          }
+        }
+      }
+      if (REXCVAR_GET(user_data_root).empty()) {
+        paths.user_data_root = carpeta / "saves";
+        if (REXCVAR_GET(cache_root).empty()) {
+          paths.cache_root = paths.user_data_root / "cache";
+        }
+      }
+      return;
+    }
+#endif
     if (!paths.game_data_root.empty()) {
       return;  // the user specified it on the command line; they take precedence.
     }
@@ -189,8 +221,10 @@ class NfsmwApp : public rex::ReXApp {
     // Without a GPU plugin the screen stays black: the game runs, but the
     // runtime discards its graphics calls with "no GPU emulation loaded".
     PonerSiNadieLoPidio("gpu_plugin", "xenos");
+#if !REX_PLATFORM_SWITCH  // no keyboard or mouse on the Switch
     // Keyboard and mouse in addition to the controller.
     PonerSiNadieLoPidio("mnk_mode", "true");
+#endif
   }
 
   void OnPostSetup() override {
@@ -229,6 +263,13 @@ class NfsmwApp : public rex::ReXApp {
     // watchdog last measured; it doesn't measure here, so opening the
     // overlay doesn't change the number being read.
     SetGuestFrameStats([this] { return stats_; });
+
+#if REX_PLATFORM_SWITCH
+    // The Switch screen is a text console while nothing renders: show that the
+    // game is alive (guest frames, memory) above the log.
+    static_cast<rex::ui::SwitchWindowedAppContext&>(app_context())
+        .SetStatusProvider([this] { return LineaDeEstadoSwitch(); });
+#endif
 
     // Hang watchdog, see below.
     ArrancarVigilante();
@@ -389,12 +430,20 @@ class NfsmwApp : public rex::ReXApp {
   //  average is needed: the interval is real.
   // ==========================================================================
   rex::ui::FrameStats MideFotogramas(double dt_s) {
+#if REX_PLATFORM_SWITCH
+    // No presenter with the null backend; it counts the guest's swaps itself.
+    if (dt_s <= 0.0) {
+      return stats_;
+    }
+    const uint64_t ahora = rex::graphics::null::NullGraphicsSystem::swap_count();
+#else
     const auto* presentador =
         runtime() && runtime()->graphics_system() ? runtime()->graphics_system()->presenter() : nullptr;
     if (!presentador || dt_s <= 0.0) {
       return stats_;
     }
     const uint64_t ahora = presentador->guest_frames_refreshed();
+#endif
     const uint64_t nuevos = ahora - fotogramas_previos_;
     fotogramas_previos_ = ahora;
 
@@ -696,6 +745,16 @@ class NfsmwApp : public rex::ReXApp {
         }
       }
 #endif
+#if REX_PLATFORM_SWITCH
+      {
+        // libnx hands malloc the whole heap at startup, so the kernel's "used"
+        // figure is always the total; malloc's own count (guest memory
+        // included, it is carved from the heap) is the real one.
+        const struct mallinfo mi = mallinfo();
+        hud_ram_mb_.store(float(double(mi.uordblks) / (1024.0 * 1024.0)),
+                          std::memory_order_relaxed);
+      }
+#endif
 
       auto* kernel = rex::system::kernel_state();
       if (!kernel) continue;
@@ -783,6 +842,19 @@ class NfsmwApp : public rex::ReXApp {
   // ==========================================================================
   //  5. BLACK EDITION PATCH + THE SETTINGS MENU (ESC)
   // ==========================================================================
+
+#if REX_PLATFORM_SWITCH
+  // Top line of the Switch status screen. Read on the UI thread.
+  std::string LineaDeEstadoSwitch() const {
+    u64 total = 0;
+    svcGetInfo(&total, InfoType_TotalMemorySize, CUR_PROCESS_HANDLE, 0);
+    return fmt::format("NFSMW Recompiled (Switch, no renderer) | guest {:4.1f} fps | "
+                       "frames {} | RAM {:.0f}/{} MB",
+                       hud_fps_.load(std::memory_order_relaxed),
+                       rex::graphics::null::NullGraphicsSystem::swap_count(),
+                       hud_ram_mb_.load(std::memory_order_relaxed), total >> 20);
+  }
+#endif
 
   void AplicarParcheBlackEdition() {
     constexpr uint32_t kBlackEditionAddr = 0x82A2CE04u;  // edicion PAL (454107D9)

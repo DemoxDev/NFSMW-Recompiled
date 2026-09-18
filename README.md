@@ -34,6 +34,7 @@ at 854×480.
 | Internal resolution scaling | Working, up to 4× |
 | Save games | Working |
 | Multiplayer | **Not working.** The privilege gate is solved; the network layer underneath is not. See [docs/diario/red-y-privilegios.md](docs/diario/red-y-privilegios.md) |
+| Nintendo Switch (homebrew .nro) | **Experimental.** Boots and runs the game (audio, controller, saves) but nothing is rendered yet. See [docs/switch.md](docs/switch.md) |
 
 ## What you need
 
@@ -83,6 +84,7 @@ source comments.
 | [docs/lanzador.md](docs/lanzador.md) | The launcher, its settings and how it is built |
 | [docs/rendimiento.md](docs/rendimiento.md) | Measured findings: EDRAM paths, resolution scaling, frame pacing |
 | [docs/problemas-conocidos.md](docs/problemas-conocidos.md) | What is broken and how far each one was traced |
+| [docs/switch.md](docs/switch.md) | The Nintendo Switch build: SD card layout, launching, building (English) |
 | [docs/diario/](docs/diario/) | Long-form write-ups of the harder diagnoses |
 
 The diary is worth reading before touching the audio or graphics code. Each entry
