@@ -6,7 +6,8 @@ and linked against libnx.
 
 ## Status
 
-**Experimental. The game runs and renders through Vulkan.**
+**Experimental. The game brings up instance, device and swapchain on NXVK in
+Eden; rendering not yet verified on hardware.**
 
 | Area | State |
 |---|---|
@@ -15,7 +16,7 @@ and linked against libnx.
 | Controller | Working (Joy-Con / Pro Controller, player 1) |
 | Audio | Working (audout, stereo downmix) |
 | Saves | Written to `saves/` next to the .nro |
-| **Graphics** | **Vulkan through NXVK, experimental.** |
+| **Graphics** | **Vulkan through NXVK: instance, device and swapchain come up in Eden; not verified on hardware.** |
 
 Graphics: the PC builds translate the Xbox 360 GPU to Vulkan or D3D12; Switch
 homebrew now runs the same Vulkan backend unmodified (`src/graphics/vulkan`,
@@ -23,8 +24,8 @@ homebrew now runs the same Vulkan backend unmodified (`src/graphics/vulkan`,
 (<https://github.com/PalindromicBreadLoaf/nxvk>), Mesa's NVK Vulkan driver
 ported to Horizon OS. No new GPU backend was written. NXVK is a very young
 driver, so device creation or presentation may still fail on some setups;
-`--gpu_backend=null` keeps the old status-console fallback (no rendering)
-available for that case.
+`gpu_backend = "null"` in `nfsmw.toml` keeps the old status-console fallback
+(no rendering) available for that case.
 
 Performance expectations: the Linux build uses about 2.3 Zen 4 cores at 60 fps.
 The Switch has three usable Cortex-A57 cores at 1 GHz, roughly 8-10 times slower
@@ -66,12 +67,21 @@ sdmc:/switch/nfsmw-recomp/
 `game/` and `saves/` are the only folders you need to care about. Back up
 `saves/` if you care about your progress.
 
+There are no command-line flags on this platform: hbmenu and emulators pass no
+argv, so everything is set in `nfsmw.toml` next to the .nro. The two worth
+knowing:
+
+```toml
+perf_overlay = true      # on-screen fps and RAM, drawn over the Vulkan output
+gpu_backend = "null"     # no rendering; falls back to the text status console
+```
+
 With Vulkan rendering, `game/` now shares the same VRAM budget concerns as
 the PC builds: the Tegra X1 has no dedicated video memory, so textures and
 render targets are carved out of the same system RAM as guest memory and
 NXVK's own allocations (see Building below). Watch the RAM figure in the
-perf overlay (`--perf_overlay`) if a texture pack or higher-resolution asset
-swap starts pushing that budget.
+perf overlay if a texture pack or higher-resolution asset swap starts pushing
+that budget.
 
 ## Launching it
 
