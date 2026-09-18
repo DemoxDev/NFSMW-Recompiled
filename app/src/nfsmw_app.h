@@ -22,6 +22,7 @@
 #include <rex/chrono/clock.h>       // CP WATCHDOG - host ticks for idle_for/vblank_age
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
+#include <rex/graphics/gpu_frame_stats.h>  // CP FRAME STATS - the [cp] log line
 #include <rex/logging.h>
 #include <rex/rex_app.h>
 #include <rex/ui/imgui_dialog.h>  // PERF OVERLAY (--perf_overlay)
@@ -469,6 +470,61 @@ class NfsmwApp : public rex::ReXApp {
   }
 
   // ==========================================================================
+  //  [cp] LINE - where the command processor thread's time goes
+  //
+  //  On hardware the guest main thread sits 100% in the GPU wait: the
+  //  command processor (the "GPU Commands" thread) is the limiter, and
+  //  nothing in the log used to say what it was doing. gpu_frame_stats()
+  //  (graphics/vulkan/gpu_frame_stats.h, zeroed on the null backend) is
+  //  cumulative since process start, same idea as MideFotogramas above: diff
+  //  against the previous sample, divide by the real elapsed time.
+  // ==========================================================================
+  struct TasasCp {
+    double draws_por_fotograma = 0.0;
+    double upload_mb_s = 0.0;
+    double texloads_s = 0.0;
+    double texload_mb_s = 0.0;
+    double resolves_s = 0.0;
+    double submits_s = 0.0;
+    double fence_wait_ms_s = 0.0;
+    double swap_ms_s = 0.0;
+    double acquire_ms_s = 0.0;
+  };
+
+  TasasCp MideStatsCp(double dt_s, uint64_t fotogramas_nuevos) {
+    TasasCp t{};
+    auto* gs = runtime() ? runtime()->graphics_system() : nullptr;
+    if (!gs || dt_s <= 0.0) {
+      return t;
+    }
+    const rex::graphics::GpuFrameStats ahora = gs->gpu_frame_stats();
+    const auto& previas = cp_stats_previas_;
+    const uint64_t draws_d = ahora.draws - previas.draws;
+    const uint64_t upload_d = ahora.upload_bytes - previas.upload_bytes;
+    const uint64_t texl_d = ahora.texture_loads - previas.texture_loads;
+    const uint64_t texb_d = ahora.texture_load_bytes - previas.texture_load_bytes;
+    const uint64_t res_d = ahora.resolves - previas.resolves;
+    const uint64_t sub_d = ahora.submits - previas.submits;
+    const uint64_t fence_d = ahora.fence_wait_us - previas.fence_wait_us;
+    const uint64_t swap_d = ahora.swap_us - previas.swap_us;
+    const uint64_t acq_d = ahora.acquire_us - previas.acquire_us;
+    cp_stats_previas_ = ahora;
+
+    constexpr double kBytesPerMb = 1024.0 * 1024.0;
+    t.draws_por_fotograma =
+        fotogramas_nuevos > 0 ? double(draws_d) / double(fotogramas_nuevos) : 0.0;
+    t.upload_mb_s = double(upload_d) / dt_s / kBytesPerMb;
+    t.texloads_s = double(texl_d) / dt_s;
+    t.texload_mb_s = double(texb_d) / dt_s / kBytesPerMb;
+    t.resolves_s = double(res_d) / dt_s;
+    t.submits_s = double(sub_d) / dt_s;
+    t.fence_wait_ms_s = double(fence_d) / 1000.0 / dt_s;
+    t.swap_ms_s = double(swap_d) / 1000.0 / dt_s;
+    t.acquire_ms_s = double(acq_d) / 1000.0 / dt_s;
+    return t;
+  }
+
+  // ==========================================================================
   //  cp: phase=... - the command processor worker thread's current stage
   //  (see rex::graphics::CommandProcessor::Phase) plus how long it's been
   //  there and how long since the last vblank. Printed alongside the
@@ -754,10 +810,21 @@ class NfsmwApp : public rex::ReXApp {
       // interval: new game frames divided by the time that's actually
       // passed. Printed every five ticks.
       const auto s = MideFotogramas(dt_s);
+      const uint64_t fotogramas_nuevos_cp =
+          s.frame_count >= cp_fotogramas_previos_ ? s.frame_count - cp_fotogramas_previos_ : 0;
+      cp_fotogramas_previos_ = s.frame_count;
+      const auto tasas_cp = MideStatsCp(dt_s, fotogramas_nuevos_cp);
       if (++desde_log_fps_ >= 5) {
         desde_log_fps_ = 0;
         REXLOG_INFO("[fps] {:5.1f} ({:5.1f} ms, {} fotogramas)", s.fps, s.frame_time_ms,
                     s.frame_count);
+        REXLOG_INFO(
+            "[cp] draws/frame={:.1f} upload_MB/s={:.2f} texloads/s={:.1f} texload_MB/s={:.2f} "
+            "resolves/s={:.1f} submits/s={:.1f} fence_wait_ms/s={:.1f} swap_ms/s={:.1f} "
+            "acquire_ms/s={:.1f}",
+            tasas_cp.draws_por_fotograma, tasas_cp.upload_mb_s, tasas_cp.texloads_s,
+            tasas_cp.texload_mb_s, tasas_cp.resolves_s, tasas_cp.submits_s,
+            tasas_cp.fence_wait_ms_s, tasas_cp.swap_ms_s, tasas_cp.acquire_ms_s);
       }
 
       // PERF OVERLAY - same tick feeds the HUD. CPU is the whole process as
@@ -1001,6 +1068,12 @@ class NfsmwApp : public rex::ReXApp {
   double hud_cpu_previa_ = 0.0;  // watchdog thread only
   uint64_t fotogramas_previos_ = 0;
   int desde_log_fps_ = 0;
+
+  // [cp] LINE - the command processor's own counters (see graphics/vulkan/
+  // gpu_frame_stats.h), same cadence and same "diff since last sample" idea
+  // as the fps counter above. Zeroed on the null backend.
+  rex::graphics::GpuFrameStats cp_stats_previas_{};
+  uint64_t cp_fotogramas_previos_ = 0;
 
   // Profiler, also only touched by the watchdog thread.
   static constexpr int kSegundosEntrePerfiles = 20;
