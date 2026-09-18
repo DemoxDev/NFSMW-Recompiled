@@ -38,6 +38,7 @@ REXCVAR_DEFINE_BOOL(perf_overlay, false, "UI",
                     "frame time, process CPU and memory. Updates once per second.");
 
 #include <algorithm>
+#include <cstring>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -241,10 +242,12 @@ class NfsmwApp : public rex::ReXApp {
   //  la activaba con  data_write(be32, 0x82a2ce04, 0x00000100); aqui se pisa
   //  directamente la memoria del guest.
   //
-  //  La memoria gestionada por memoria::Memory se expone en big-endian: el
-  //  offset 0 es el byte mas significativo. Por eso basta escribir el valor
-  //  tal cual (0x00000100), sin endian-swap: es lo mismo que hacia la patch
-  //  .toml con el archivo del XEX parcheado.
+  //  La memoria del guest es big-endian y el juego lee esa palabra byte a
+  //  byte: be32 0x00000100 son los bytes 00 00 01 00, o sea un 1 en
+  //  0x82A2CE06. Se escriben los cuatro bytes tal cual, NUNCA un uint32 del
+  //  host: en little-endian eso ponia el 1 en 0x82A2CE05, otra bandera que
+  //  lee el cargador de ficheros, y toda partida nueva moria en su tabla de
+  //  peticiones (lectura del guest 0x8 en el hilo 7, PC y Switch).
   //
   //  Se puede apagar desde el menu (Contenido > Black Edition), pero solo se
   //  aplica en la carga siguiente: esta funcion corre cada vez que se carga
@@ -792,16 +795,18 @@ class NfsmwApp : public rex::ReXApp {
       REXLOG_INFO("[black-edition] desactivado (black_edition=false).");
       return;
     }
-    auto* bandera = kernel->memory()->TranslateVirtual<uint32_t*>(kBlackEditionAddr);
+    auto* bandera = kernel->memory()->TranslateVirtual<uint8_t*>(kBlackEditionAddr);
     if (bandera == nullptr) {
       REXLOG_WARN("[black-edition] no se pudo traducir 0x{:08X}; el contenido "
                   "Black Edition seguira oculto.", kBlackEditionAddr);
       return;
     }
-    // La memoria del guest se expone en big-endian: el valor se escribe tal cual.
-    *bandera = 0x00000100u;
-    REXLOG_INFO("[black-edition] bandera 0x{:08X} = 0x{:08X} (contenido desbloqueado).",
-                kBlackEditionAddr, *bandera);
+    // be32 0x00000100, byte a byte: el juego lee esta palabra como cuatro
+    // banderas de un byte (ver la cabecera de 2b).
+    static constexpr uint8_t kBe32Cien[4] = {0x00, 0x00, 0x01, 0x00};
+    std::memcpy(bandera, kBe32Cien, sizeof(kBe32Cien));
+    REXLOG_INFO("[black-edition] bandera 0x{:08X} = be32 0x00000100 (contenido desbloqueado).",
+                kBlackEditionAddr);
   }
 
   void AlternarMenu() {
