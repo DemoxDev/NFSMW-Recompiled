@@ -37,6 +37,34 @@
 # compiler can actually keep them in registers.
 cr_as_local = true
 
+# xer_as_local and ctr_as_local WERE TESTED AND REVERTED (2026-09-17).
+#
+# With both enabled the game hung deterministically, always at the same
+# point: right as the guest threads that load the first track (L2RA_Sunset)
+# were started as a block, with exit code -1073741681 (0xC0000135) and not a
+# single [error]/[fatal] earlier in the log -exactly the pattern of an
+# indirect branch (bctr) landing on a garbage address, not that of a missing
+# DLL-. Reproduced the same way on two different machines.
+#
+# SUSPICION: ctr_as_local turns CTR from a per-thread context field into a
+# local variable of each generated function. bctr/bctrl -indirect branches,
+# switch tables, vtables- READ that CTR to decide where to jump. If any
+# generated code expects CTR to survive across calls to other recompiled
+# functions -or across a setjmp/longjmp boundary, which this project DOES
+# use (see setjmp/longjmp below)-, the local copy goes out of sync with the
+# real value and the indirect branch lands anywhere. xer_as_local was
+# reverted at the same time out of caution, not because there is any
+# evidence against it on its own: there was no time to isolate which of the
+# two was to blame.
+#
+# Do NOT re-enable without first: (a) testing them separately -xer alone
+# first, rebuild, play a long session; then ctr alone- and (b) checking
+# whether ReXGlue's codegen writes CTR back to the context before every
+# call/branch between functions when ctr_as_local is enabled. If it does
+# not, that is a codegen bug and not something fixable from here.
+# xer_as_local = true
+# ctr_as_local = true
+
 # --- end root PERFORMANCE ---
 
 [functions]
