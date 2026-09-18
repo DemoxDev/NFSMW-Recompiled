@@ -130,6 +130,18 @@ class NfsmwApp : public rex::ReXApp {
           paths.cache_root = paths.user_data_root / "cache";
         }
       }
+      // NXVK'S OWN DIAGNOSTICS TO THE CARD.
+      //
+      // Mesa (NVK's driver core) logs GPU faults and channel errors through
+      // mesa_log, which goes to stderr - lost on Switch, there is no
+      // console. Mesa honours MESA_LOG_FILE (nxvk/src/util/log.c) and writes
+      // there instead, at its default verbosity (MESA_LOG is deliberately
+      // left unset). This has to run before the Vulkan instance exists:
+      // OnConfigurePaths is called from SetupEnvironment(), which precedes
+      // SetupPresentation() - and therefore instance creation - in
+      // rex_app.cpp's OnInitialize(). The 3rd setenv() argument is 0
+      // (don't overwrite) so an operator-provided MESA_LOG_FILE still wins.
+      setenv("MESA_LOG_FILE", (carpeta / "logs" / "mesa.log").string().c_str(), 0);
       return;
     }
 #endif

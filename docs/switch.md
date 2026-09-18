@@ -45,6 +45,10 @@ sdmc:/switch/nfsmw-recomp/
 │   └── Movies/
 ├── saves/               created on first run: profile and save games
 ├── logs/                created on first run: nfsmw_NNN.log, one per run
+│                        also mesa.log: NVK/Mesa's own GPU fault and channel
+│                        error log, which otherwise goes to a stderr nobody
+│                        can see on this platform (MESA_LOG_FILE, set before
+│                        the Vulkan instance is created)
 └── nfsmw.toml           optional settings, same format as on PC
 ```
 
