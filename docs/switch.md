@@ -94,8 +94,13 @@ The game needs about 1.5 GB of RAM, so it must run with **full memory**:
 
 Requires a Switch running Atmosphère.
 
-To quit: HOME, then close the software. On a startup error the log stays on
-screen; press **+** to exit.
+To quit: HOME, then close the software, or press **+** while playing (also
+used on a startup error, where the log stays on screen). Quitting now calls
+`svcExitProcess()` instead of a soft exit, because nx-hbloader reuses its
+process: anything short of that used to leave our threads running and the
+console sluggish after "quitting". One side effect: when launched via title
+takeover (holding **R**), pressing **+** now returns to the **HOME menu**
+rather than back to hbmenu, since the process is actually gone.
 
 ## Controls
 
