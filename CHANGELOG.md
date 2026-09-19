@@ -2,6 +2,16 @@
 
 Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [Sin publicar]
+
+### Añadido
+
+- Compilación nativa de macOS (Apple Silicon) con Vulkan sobre MoltenVK:
+  `tools/build_mac.sh` aplica los parches al SDK, lo compila con el stack
+  Vulkan→MoltenVK de sus submódulos (loader + ICD), genera el código, compila
+  el juego y arma `build/mac/` autocontenida y el bundle `NFSMW.app`.
+  Documentación en `docs/macos.md`.
+
 ## [0.0.2] - 2026-09-17
 
 ### Añadido

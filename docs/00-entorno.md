@@ -56,6 +56,26 @@ ninja --version
 pkg-config --modversion gtk+-3.0
 ```
 
+## macOS (Apple Silicon)
+
+```bash
+xcode-select --install
+brew install cmake ninja python
+python3 --version    # 3.10+; si no, brew te enlaza python3.12
+```
+
+El SDK, igual que en Linux:
+
+```bash
+cd rexglue-sdk
+git submodule update --init --recursive
+cmake --preset mac-arm64 -DREXGLUE_USE_VULKAN=ON
+cmake --build out/build/mac-arm64 --config Release --target install
+```
+
+El juego: `tools/build_mac.sh` hace todo (parches, SDK, codegen, juego, carpeta
+`build/mac/` y el bundle `NFSMW.app`). Ver [macos.md](macos.md).
+
 ## Camino rápido (Windows)
 
 Doble clic en **`FASE0_ENTORNO.bat`** en la raíz del proyecto. Localiza Visual Studio

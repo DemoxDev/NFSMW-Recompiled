@@ -35,6 +35,7 @@ at 854×480.
 | Save games | Working |
 | Multiplayer | **Not working.** The privilege gate is solved; the network layer underneath is not. See [docs/diario/red-y-privilegios.md](docs/diario/red-y-privilegios.md) |
 | Nintendo Switch (homebrew .nro) | **Experimental.** Boots and runs the game (audio, controller, saves) but nothing is rendered yet. See [docs/switch.md](docs/switch.md) |
+| macOS (Apple Silicon, MoltenVK) | **Experimental.** Builds and boots with rendering through Vulkan on MoltenVK; see [docs/macos.md](docs/macos.md) |
 
 ## What you need
 
@@ -54,6 +55,8 @@ tools\bootstrap.ps1          :: clones and builds the ReXGlue SDK into ..\rexglu
 EXTRAER_XEX.bat              :: pulls default.xex out of your ISO into assets\
 CONSTRUIR.bat                :: patches the SDK, recompiles it, builds the game, packages build\
 ```
+
+On macOS (Apple Silicon): `tools/build_mac.sh` — see [docs/macos.md](docs/macos.md).
 
 `CONSTRUIR.bat` is the whole pipeline. It applies every patch this project carries,
 rebuilds the SDK (that is where the fixes live), runs the code generator, compiles the
