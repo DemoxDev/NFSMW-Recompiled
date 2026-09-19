@@ -22,7 +22,21 @@
 #include <rex/chrono/clock.h>       // CP WATCHDOG - host ticks for idle_for/vblank_age
 #include <rex/cvar.h>
 #include <rex/filesystem.h>
-#include <rex/graphics/gpu_frame_stats.h>  // CP FRAME STATS - the [cp] log line
+// CP FRAME STATS - the [cp] log line. La API (GpuFrameStats + el método
+// IGraphicsSystem::gpu_frame_stats()) existía solo en el checkout Linux del
+// usuario y nunca se subió al SDK: el SDK puro (v0.10.0) no la trae. Con
+// __has_include compilamos contra ambos: si el SDK algún día publica
+// <rex/graphics/gpu_frame_stats.h>, este guard se enciende solo.
+#if defined(__has_include)
+#  if __has_include(<rex/graphics/gpu_frame_stats.h>)
+#    define NFSMW_TIENE_CP_STATS 1
+#    include <rex/graphics/gpu_frame_stats.h>
+#  endif
+#endif
+#ifndef NFSMW_TIENE_CP_STATS
+#  define NFSMW_TIENE_CP_STATS 0
+#endif
+
 #include <rex/logging.h>
 #include <rex/rex_app.h>
 #include <rex/ui/imgui_dialog.h>  // PERF OVERLAY (--perf_overlay)
@@ -492,6 +506,15 @@ class NfsmwApp : public rex::ReXApp {
   };
 
   TasasCp MideStatsCp(double dt_s, uint64_t fotogramas_nuevos) {
+#if !NFSMW_TIENE_CP_STATS
+    // Sin <rex/graphics/gpu_frame_stats.h> (SDK puro, v0.10.0) no hay contadores
+    // que medir: la línea [cp] sale a ceros. El guard (__has_include) se cura
+    // solo: cuando el SDK suba la cabecera, esta función vuelve a medir de
+    // verdad sin tocar nada aquí.
+    (void)dt_s;
+    (void)fotogramas_nuevos;
+    return TasasCp{};
+#else
     TasasCp t{};
     auto* gs = runtime() ? runtime()->graphics_system() : nullptr;
     if (!gs || dt_s <= 0.0) {
@@ -522,6 +545,7 @@ class NfsmwApp : public rex::ReXApp {
     t.swap_ms_s = double(swap_d) / 1000.0 / dt_s;
     t.acquire_ms_s = double(acq_d) / 1000.0 / dt_s;
     return t;
+#endif
   }
 
   // ==========================================================================
@@ -533,6 +557,14 @@ class NfsmwApp : public rex::ReXApp {
   //  thread the guest can't see: the GPU's.
   // ==========================================================================
   void ImprimeFaseCp(bool grave) const {
+#if !NFSMW_TIENE_CP_STATS
+    // Mismo caso que MideStatsCp: el IGraphicsSystem del SDK puro tampoco
+    // expone cp_phase_name()/cp_last_activity_tick()/last_vblank_tick(). Sin
+    // nada que imprimir, salida temprana; el guard se reactiva solo cuando
+    // el SDK publique la cabecera.
+    (void)grave;
+    return;
+#else
     auto* gs = runtime() ? runtime()->graphics_system() : nullptr;
     if (!gs) {
       return;
@@ -554,6 +586,7 @@ class NfsmwApp : public rex::ReXApp {
       REXLOG_DEBUG("[vigilante] cp: phase={} idle_for={} vblank_age={}", gs->cp_phase_name(),
                    idle_for, vblank_age);
     }
+#endif
   }
 
   // ==========================================================================
@@ -1071,8 +1104,11 @@ class NfsmwApp : public rex::ReXApp {
 
   // [cp] LINE - the command processor's own counters (see graphics/vulkan/
   // gpu_frame_stats.h), same cadence and same "diff since last sample" idea
-  // as the fps counter above. Zeroed on the null backend.
+  // as the fps counter above. Zeroed on the null backend. La muestra previa
+  // solo existe si el SDK trae la cabecera (ver el guard de arriba).
+#if NFSMW_TIENE_CP_STATS
   rex::graphics::GpuFrameStats cp_stats_previas_{};
+#endif
   uint64_t cp_fotogramas_previos_ = 0;
 
   // Profiler, also only touched by the watchdog thread.
