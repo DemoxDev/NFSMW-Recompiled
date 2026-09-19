@@ -137,5 +137,21 @@ fase_comprobaciones
 fase_submodulos
 fase_parches
 fase_sdk
+
+# ---------------------------------------------------------------------------
+# 4. App: dos pasadas. La primera solo codegen: reescribe nfsmw_pch.h y en
+#    una sola pasada ninja enlazaria con el PCH viejo (CONSTRUIR.bat lo
+#    documenta; el fallo tipico es 'nfsmw_pch.h has been modified').
+# ---------------------------------------------------------------------------
+fase_app() {
+    echo "== 4. App (mac-arm64-release) =="
+    cmake --preset mac-arm64-release -S app -DCMAKE_PREFIX_PATH="$SDK_INSTALL"
+    # Los presets del build viven en app/CMakePresets.json: cmake --build
+    # --preset los busca en el cwd, asi que la pasada se lanza desde app.
+    ( cd app && cmake --build --preset mac-arm64-release --target nfsmw_codegen )
+    ( cd app && cmake --build --preset mac-arm64-release )
+}
+
+fase_app
 echo
-echo "Done (fases 0-3). Sigue: fase_dist (Task 4)."
+echo "Done (fases 0-4). Sigue: fase_dist (Task 4)."
