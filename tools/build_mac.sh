@@ -9,17 +9,22 @@
 #
 #   tools/build_mac.sh
 #   REX_PYTHON=python3.12 tools/build_mac.sh
+#   NFSMW_MAC_DIST_DIR=/ruta/de/la/dist tools/build_mac.sh  (defecto: build/mac)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p logs
 LOG=logs/construir-mac.log
 exec > >(tee -a "$LOG") 2>&1
 
+[ -d ../rexglue-sdk ] || { echo "[ERROR] No veo ../rexglue-sdk (clona el SDK junto a este repo)."; exit 1; }
 SDK_DIR=$(realpath ../rexglue-sdk)
 SDK_BUILD=$SDK_DIR/out/build/mac-arm64
 SDK_INSTALL=$SDK_DIR/out/install/mac-arm64
 APP_BUILD=app/out/build/mac-arm64-release
 DIST_DIR=${NFSMW_MAC_DIST_DIR:-build/mac}
+# La ruta va absoluta: mac_dist/mac_app se la pasan tal cual al cmake -P, y
+# relativa caeria dentro del build dir.
+case $DIST_DIR in /*) ;; *) DIST_DIR=$PWD/$DIST_DIR;; esac
 
 # ---------------------------------------------------------------------------
 # 0. Comprobaciones. Sin estas el build falla a mitad, peor.
@@ -145,7 +150,10 @@ fase_sdk
 # ---------------------------------------------------------------------------
 fase_app() {
     echo "== 4. App (mac-arm64-release) =="
-    cmake --preset mac-arm64-release -S app -DCMAKE_PREFIX_PATH="$SDK_INSTALL"
+    # NFSMW_MAC_DIST_DIR entra aqui en la cache de CMake: cmake --build no
+    # acepta -D, y mac_dist/mac_app la leen de ahi (var de cache del plan).
+    cmake --preset mac-arm64-release -S app -DCMAKE_PREFIX_PATH="$SDK_INSTALL" \
+          -DNFSMW_MAC_DIST_DIR="$DIST_DIR"
     # Los presets del build viven en app/CMakePresets.json: cmake --build
     # --preset los busca en el cwd, asi que la pasada se lanza desde app.
     ( cd app && cmake --build --preset mac-arm64-release --target nfsmw_codegen )
