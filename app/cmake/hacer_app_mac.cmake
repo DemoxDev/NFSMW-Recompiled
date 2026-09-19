@@ -44,9 +44,11 @@
 #      "Failed loading library associated with ICD JSON
 #      <dir del json>/@executable_path/../..."). Desde Contents/Resources/
 #      vulkan/icd.d/, ../../../Frameworks/ cae en Contents/Frameworks: mismo
-#      mecanismo relativo que ya usa la dist con exito. Con el layout de
-#      MacOS/lib reconocido, ademas el propio runtime fija VK_DRIVER_FILES
-#      al ICD del bundle.
+#      mecanismo relativo que ya usa la dist con exito. El loader encuentra
+#      el json por su propio barrido de los recursos del bundle
+#      (Contents/Resources/vulkan/icd.d); el runtime, por su parte,
+#      reconoce el bundle como raiz por el atajo MacOS/lib -> ../Frameworks
+#      (el marcador lib/libvulkan.1.dylib queda junto al ejecutable).
 #    - nfsmw.toml SOLO en Contents/Resources: el SDK lo lee y lo guarda de
 #      exe_dir (rex_app.cpp: config_path = exe_dir/<name>.toml), pero codesign
 #      trata TODO lo que hay bajo Contents/MacOS como codigo anidado y se
