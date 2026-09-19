@@ -164,5 +164,15 @@ fase_dist() {
     ( cd app && cmake --build --preset mac-arm64-release --target mac_dist )
 }
 fase_dist
+# ---------------------------------------------------------------------------
+# 6. El bundle NFSMW.app. Doble clic en Finder: sin argv, el juego busca su
+#    data junto al ejecutable (game_root/ o un .iso) dentro de Contents/MacOS.
+# ---------------------------------------------------------------------------
+fase_bundle() {
+    echo "== 6. mac_app =="
+    # Los presets del build viven en app/CMakePresets.json (igual que fase_app).
+    ( cd app && cmake --build --preset mac-arm64-release --target mac_app )
+}
+fase_bundle
 echo
-echo "Done (fases 0-5)."
+echo "Done (fases 0-6)."

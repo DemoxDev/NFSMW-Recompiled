@@ -198,6 +198,10 @@ if(APPLE)
     if(NOT DEFINED NFSMW_MAC_DIST_DIR)
         set(NFSMW_MAC_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/mac")
     endif()
+    # Version para el Info.plist del bundle (CFBundleShortVersionString).
+    if(NOT DEFINED NFSMW_VERSION)
+        set(NFSMW_VERSION "${REXGLUE_VERSION_STRING}")
+    endif()
     find_package(SDL3 CONFIG REQUIRED)
     add_custom_target(mac_dist
         DEPENDS nfsmw
@@ -215,5 +219,23 @@ if(APPLE)
                 -D "D_PACKAGING=${CMAKE_CURRENT_SOURCE_DIR}/../packaging/macos"
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/hacer_dist_mac.cmake"
         COMMENT "Armando la carpeta autocontenida en ${NFSMW_MAC_DIST_DIR}"
+        VERBATIM)
+
+    # El bundle NFSMW.app (doble clic en Finder). Reutiliza la dist relinkada
+    # que mac_dist acaba de armar: el binario, las dylibs y el plugin plano
+    # viajan tal cual; el ICD se re-targeta al layout del bundle. Ver
+    # hacer_app_mac.cmake para el detalle del layout.
+    add_custom_target(mac_app
+        DEPENDS mac_dist
+        COMMAND ${CMAKE_COMMAND}
+                -D "D_BUNDLE=${NFSMW_MAC_DIST_DIR}/NFSMW.app"
+                -D "D_PLIST=${CMAKE_CURRENT_SOURCE_DIR}/../packaging/macos/Info.plist.in"
+                -D "D_DIST=${NFSMW_MAC_DIST_DIR}"
+                -D "D_VERSION=${NFSMW_VERSION}"
+                -D "D_ICD=${REXGLUE_MOLTENVK_ICD}"
+                -D "D_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/nfsmw.toml"
+                -D "D_README=${CMAKE_CURRENT_SOURCE_DIR}/../packaging/macos/README.txt"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/hacer_app_mac.cmake"
+        COMMENT "Armando NFSMW.app en ${NFSMW_MAC_DIST_DIR}"
         VERBATIM)
 endif()
