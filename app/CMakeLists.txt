@@ -187,3 +187,33 @@ if(WIN32)
         VERBATIM
     )
 endif()
+
+# =============================================================================
+#  macOS - mac_dist: carpeta autocontenida en build/mac, con el layout del
+#  install del SDK (lib/, share/vulkan/icd.d/) para que el ICD que viaja y
+#  la deteccion propia del runtime (src/ui/vulkan/vulkan_moltenvk.cpp)
+#  funcionen sin cambios. Ver docs/macos.md.
+# =============================================================================
+if(APPLE)
+    if(NOT DEFINED NFSMW_MAC_DIST_DIR)
+        set(NFSMW_MAC_DIST_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../build/mac")
+    endif()
+    find_package(SDL3 CONFIG REQUIRED)
+    add_custom_target(mac_dist
+        DEPENDS nfsmw
+        COMMAND ${CMAKE_COMMAND}
+                -D "D_EXE=$<TARGET_FILE:nfsmw>"
+                -D "D_BUILD=$<TARGET_FILE_DIR:nfsmw>"
+                -D "D_DIST=${NFSMW_MAC_DIST_DIR}"
+                -D "D_SDK_INSTALL=${rexglue_DIR}/../../.."
+                -D "D_VULKAN_LOADER=$<TARGET_FILE:rex::vulkan-loader>"
+                -D "D_MOLTENVK=$<TARGET_FILE:rex::moltenvk>"
+                -D "D_SDL3=$<TARGET_FILE:SDL3::SDL3>"
+                -D "D_ICD=${REXGLUE_MOLTENVK_ICD}"
+                -D "D_CONFIG=${CMAKE_CURRENT_SOURCE_DIR}/nfsmw.toml"
+                -D "D_README=${CMAKE_CURRENT_SOURCE_DIR}/../packaging/macos/README.txt"
+                -D "D_PACKAGING=${CMAKE_CURRENT_SOURCE_DIR}/../packaging/macos"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/hacer_dist_mac.cmake"
+        COMMENT "Armando la carpeta autocontenida en ${NFSMW_MAC_DIST_DIR}"
+        VERBATIM)
+endif()

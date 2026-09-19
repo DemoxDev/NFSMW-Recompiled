@@ -153,5 +153,16 @@ fase_app() {
 }
 
 fase_app
+
+# ---------------------------------------------------------------------------
+# 5. La carpeta build/mac. El juego viaja sin datos: el usuario pone su
+#    .iso o su game_root/ junto al binario. comprobar_dist.sh lo verifica.
+# ---------------------------------------------------------------------------
+fase_dist() {
+    echo "== 5. mac_dist =="
+    # Los presets del build viven en app/CMakePresets.json (igual que fase_app).
+    ( cd app && cmake --build --preset mac-arm64-release --target mac_dist )
+}
+fase_dist
 echo
-echo "Done (fases 0-4). Sigue: fase_dist (Task 4)."
+echo "Done (fases 0-5)."
