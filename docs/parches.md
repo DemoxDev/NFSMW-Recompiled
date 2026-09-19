@@ -134,6 +134,32 @@ Abre la puerta del menú y nada más. Lo que hay detrás no funciona; ver
 Instrumentación general que se quedó porque es barata y útil. Entre otras cosas es lo
 que puso nombre y hora al cuelgue del audio.
 
+### `parche_fotogramas.py` — el contador de fotogramas del guest
+
+Publica `Presenter::guest_frames_refreshed()`: cuántos refreshes activos del guest
+output ha aceptado el presentador, o lo que es lo mismo, cuántos fotogramas del juego
+han pasado por pantalla. Es lo que la app lee para la línea `[fps]` del log y para el
+overlay (`MideFotogramas` en `nfsmw_app.h`): un contador que solo sube cuando hay
+fotograma de verdad, no cuando la UI repinta.
+
+Es un parche LOCAL del SDK que existió en el checkout Linux del usuario, sobre el que
+se escribió el medidor de la app, y que nunca llegó al SDK puro (v0.10.0): sin él, la
+app no compila (`error: no member named 'guest_frames_refreshed' in
+'rex::ui::Presenter'`). Es el décimo parche y el único que no está en `CONSTRUIR.bat`;
+`tools/build_mac.sh` lo aplica tras `parche_privilegios`.
+
+Toca dos ficheros: el accesor y el `std::atomic<uint64_t>` van en
+`include/rex/ui/presenter.h` (ya incluía `<atomic>`), y el `fetch_add` va en el
+`RefreshGuestOutput` de `src/ui/presenter.cpp`, solo en la rama `is_active` — un
+refresh en blanco (guest output inactivo) no cuenta, o el medidor volvería a medir
+repintados de la UI. El contador es atómico porque `RefreshGuestOutput` corre en
+cualquier hilo; solo alimenta un medidor de ritmo, así que `relaxed`.
+
+**Comprobado:** los tres anclajes aparecen exactamente una vez en el SDK puro (contado
+con grep antes de escribirlos), aplicar → idempotente, `--revertir` restaura el par
+desde los `.original`, reaplicar deja el mismo texto; y el build de la app enlaza con
+él (ver la sección macOS de [compilar.md](compilar.md)).
+
 ### `tools/diagnostico/parche_xma.py` — instrumentación pesada del XMA
 
 **Fuera del build por defecto.** Traza por segundo del hilo de audio, cada envío y cada

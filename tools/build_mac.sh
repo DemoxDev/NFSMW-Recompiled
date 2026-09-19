@@ -92,11 +92,15 @@ vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang vulkan-
 # ---------------------------------------------------------------------------
 # 2. Parches. Idempotentes; el orden es el de CONSTRUIR.bat y no es capricho
 #    (anillo va antes que desatasco, que usa lo que anillo añade).
+#    parche_fotogramas es el décimo y último, y no está en CONSTRUIR.bat: es
+#    el parche LOCAL del contador de fotogramas que la app lee para el [fps]
+#    y que nunca llegó al SDK puro (v0.10.0).
 # ---------------------------------------------------------------------------
 fase_parches() {
     echo "== 2. Parches del SDK =="
     local parches="parche_diagnostico parche_anillo parche_desatasco parche_presentador \
-parche_gpu_fallback parche_restaurar parche_velocidad parche_backend parche_privilegios"
+parche_gpu_fallback parche_restaurar parche_velocidad parche_backend parche_privilegios \
+parche_fotogramas"
     local p
     for p in $parches; do
         echo "   $p"
@@ -134,4 +138,4 @@ fase_submodulos
 fase_parches
 fase_sdk
 echo
-echo "Done (fases 0-3). Sigue: fase_app (Task 3)."
+echo "Done (fases 0-3). Sigue: fase_dist (Task 4)."
