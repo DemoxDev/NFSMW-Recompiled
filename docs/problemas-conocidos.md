@@ -119,3 +119,33 @@ que sombrear.
 
 **Perseguir los servidores de EA.** Están apagados. La única vía para el multijugador es
 System Link.
+
+## macOS (Apple Silicon, MoltenVK)
+
+El build nativo de macOS funciona; lo que sigue no está roto, son los avisos que salen
+en el log y qué significan, anotados para no perseguirlos. El detalle completo, con la
+verificación, está en [macos.md](macos.md), sección *Troubleshooting*.
+
+- **Dos `[error]` en el primer arranque.** `requested backend 'd3d12' is not compiled
+  into this plugin` y `GPU plugin 'xenos' factory returned no graphics system`. **Es
+  normal.** Un user data root recién creado pide `gpu_backend = "d3d12"` (el default de
+  Windows) y macOS no lleva D3D12; el parche del backend cae a Vulkan por diseño
+  (`Arrancando con 'vulkan' en su lugar`). Fija `gpu_backend = "vulkan"` y desaparecen.
+
+- **Hasta siete `[error]`/`[vigilante]` a los ~5 s del primer arranque.** El vigilante
+  fotografía un atasco durante la carga del título, antes de que arranquen los hilos
+  invitados. Recupera y renderiza justo después; los arranques siguientes ya no lo
+  repiten.
+
+- **Miles de `mvk-warn: Metal does not support disabling primitive restart`.** Aviso de
+  MoltenVK, uno por pipeline creado. Ruido del log: el render sigue entre ellos.
+
+- **`Vulkan geometryShader is not supported by the device`.** MoltenVK no expone el
+  geometry shader en las GPUs de Apple; el backend pasa a sus caminos de reserva de
+  primitivas y el render continúa. Ojo a la calidad de la expansión de geometría: si
+  algo se ve raro, reportar.
+
+- **Al reportar, mirar primero la línea de detección del runtime.**
+  `Loaded Vulkan runtime from .../lib/libvulkan.1.dylib` debe apuntar al build propio;
+  si sale `/opt/homebrew/...`, ganó homebrew el sorteo de detección, y eso es lo
+  primero que hay que contar.

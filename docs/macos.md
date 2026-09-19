@@ -47,9 +47,9 @@ Everything lives in one folder:
 build/mac/
 ├── nfsmw                     the game
 ├── librexgpu-xenos.dylib     the GPU plugin (dlopen'ed next to the game)
-├── lib/                      dylibs: librexruntime, libTracyClient,
-│                             libvulkan.1 (the Vulkan loader),
-│                             libMoltenVK (do not delete any)
+├── lib/                      dylibs: librexgpu-xenos, librexruntime,
+│                             libTracyClient, libvulkan.1 (the Vulkan
+│                             loader), libMoltenVK (do not delete any)
 ├── share/vulkan/icd.d/       MoltenVK_icd.json (library_path is relative
 │                             to the json: ../../../lib/libMoltenVK.dylib)
 ├── nfsmw.toml                optional settings, same format as on PC

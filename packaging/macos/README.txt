@@ -10,8 +10,8 @@ WHERE THINGS GO
     build/mac/
       nfsmw                 the game
       librexgpu-xenos.dylib the GPU plugin (dlopen'ed next to the game)
-      lib/                  dylibs: runtime, Tracy, Vulkan loader,
-                            MoltenVK (do not delete any)
+      lib/                  dylibs: librexgpu-xenos, runtime, Tracy,
+                            Vulkan loader, MoltenVK (do not delete any)
       share/vulkan/icd.d/   MoltenVK_icd.json (points at ../lib)
       nfsmw.toml            settings, same format as on PC
       README.txt            this file
