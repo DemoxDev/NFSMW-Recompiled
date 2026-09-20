@@ -241,6 +241,15 @@ if errorlevel 1 (
     echo [ERROR] No se pudo anadir el sueno de los sondeos. Me detengo.
     goto fin
 )
+rem The game dies with a guest access violation when the audio device cannot
+rem be opened (it never checks the registration error). This makes the SDL
+rem driver fall back to a silent one that consumes frames at the device rate,
+rem so the game keeps running without sound instead of crashing.
+%PY% "%~dp0tools\parche_audio_silencio.py"
+if errorlevel 1 (
+    echo [ERROR] No se pudo anadir el audio silencioso. Me detengo.
+    goto fin
+)
 echo.
 
 echo ############################################
