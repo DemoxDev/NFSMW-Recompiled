@@ -14,7 +14,7 @@ title load; free roam and long sessions are not verified yet.**
 | Area | State |
 |---|---|
 | Boot, XEX load, guest threads | Working |
-| Title/menu rendering (Vulkan on MoltenVK) | Working. Apple M1 GPU, 25–35 fps steady; 1–7 fps readings on the very first boots under heavy machine load (MoltenVK compiles pipelines on first use) |
+| Title/menu rendering (Vulkan on MoltenVK) | Working. Apple M1 GPU: 60 fps steady at `resolution_scale = 1`, ~30 fps at the shipped `resolution_scale = 2` (2560×1440 internal). The four performance patches below are applied by `tools/build_mac.sh`; without them the UI repaints unthrottled and the game drops to 4–15 fps |
 | Audio | Working. Opens the default CoreAudio output device (observed: "MacBook Air Speakers", 6 ch, 48000 Hz) |
 | Controller | SDL3 gamepad support is in; not exercised with a pad in the verification runs |
 | Saves | Written to the `--user_data_root` folder, created on demand. Not exercised beyond directory creation |
@@ -234,8 +234,13 @@ this app is GPL-3.0 — all three are compatible in the same binary.
   `gpu_backend = "null"` in `nfsmw.toml` (no rendering, but the game runs)
   and send the log with the report.
 - **Low fps on first boot** — MoltenVK compiles Metal pipelines on first
-  use, and background load skews the meter: readings of 1–7 fps under heavy
-  machine load, 25–35 fps steady afterwards on the reference M1.
+  use, and background load skews the meter. Steady-state numbers with the
+  performance patches applied (`parche_ui_ticks`, `parche_pipeline_pintado`,
+  `parche_cvar_plugin`, `parche_sleep0`; see
+  [parches.md](parches.md)): 60 fps at `resolution_scale = 1`, ~30 fps at
+  `resolution_scale = 2` on the reference M1. Without them the UI repaints
+  unthrottled off Windows (~200 paints/s) and starves the guest present:
+  4–15 fps, which is what earlier builds showed.
 - **Re-signing a used bundle fails** — the first run creates
   `Contents/MacOS/logs/`, and codesign treats everything under
   `Contents/MacOS` as code, so signing then fails. Don't re-sign a used
