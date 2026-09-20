@@ -97,15 +97,18 @@ vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang vulkan-
 # ---------------------------------------------------------------------------
 # 2. Parches. Idempotentes; el orden es el de CONSTRUIR.bat y no es capricho
 #    (anillo va antes que desatasco, que usa lo que anillo añade).
-#    parche_fotogramas es el décimo y último, y no está en CONSTRUIR.bat: es
-#    el parche LOCAL del contador de fotogramas que la app lee para el [fps]
-#    y que nunca llegó al SDK puro (v0.10.0).
+#    parche_fotogramas es el décimo, el parche LOCAL del contador de fotogramas
+#    que la app lee para el [fps] y que nunca llegó al SDK puro (v0.10.0).
+#    Los cuatro últimos son los arreglos de rendimiento de macOS y van también
+#    en CONSTRUIR.bat porque no son específicos de la plataforma: el pipeline
+#    del presentador y el límite de ritmo de la UI son del backend Vulkan, y
+#    los cvars del plugin y el sueño del Sleep(0) son del runtime.
 # ---------------------------------------------------------------------------
 fase_parches() {
     echo "== 2. Parches del SDK =="
     local parches="parche_diagnostico parche_anillo parche_desatasco parche_presentador \
 parche_gpu_fallback parche_restaurar parche_velocidad parche_backend parche_privilegios \
-parche_fotogramas"
+parche_fotogramas parche_ui_ticks parche_pipeline_pintado parche_cvar_plugin parche_sleep0"
     local p
     for p in $parches; do
         echo "   $p"

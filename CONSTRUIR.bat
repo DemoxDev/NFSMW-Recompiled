@@ -214,6 +214,33 @@ if errorlevel 1 (
     echo [ERROR] No se pudo anadir el ajuste de privilegios. Me detengo.
     goto fin
 )
+rem Performance fixes found while investigating the macOS slowdown, kept for
+rem every platform: the Vulkan presenter was destroying and recreating its
+rem guest-output pipeline on every paint (MoltenVK recompiles SPIR-V to MSL
+rem each time), the UI had no repaint rate limit off Windows, GPU-plugin
+rem cvars from nfsmw.toml and the command line were lost when the requested
+rem backend wasn't compiled in and the app fell back to the other one, and
+rem Sleep(0) polling burned a whole core as sched_yield.
+%PY% "%~dp0tools\parche_ui_ticks.py"
+if errorlevel 1 (
+    echo [ERROR] No se pudo limitar el ritmo de la UI. Me detengo.
+    goto fin
+)
+%PY% "%~dp0tools\parche_pipeline_pintado.py"
+if errorlevel 1 (
+    echo [ERROR] No se pudo arreglar el pipeline del presentador. Me detengo.
+    goto fin
+)
+%PY% "%~dp0tools\parche_cvar_plugin.py"
+if errorlevel 1 (
+    echo [ERROR] No se pudieron conservar los cvars del plugin. Me detengo.
+    goto fin
+)
+%PY% "%~dp0tools\parche_sleep0.py"
+if errorlevel 1 (
+    echo [ERROR] No se pudo anadir el sueno de los sondeos. Me detengo.
+    goto fin
+)
 echo.
 
 echo ############################################
