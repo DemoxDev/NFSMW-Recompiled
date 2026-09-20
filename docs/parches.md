@@ -201,7 +201,8 @@ El parche asigna el campo justo después de crear el pipeline; a partir de ahí 
 una vez por formato de swapchain, como estaba pensado.
 
 **Comprobado:** aplicar → idempotente, `--estado` 1/1, `--revertir` deja el fichero sin
-diff; el muestreo posterior ya no ve `CreateGuestOutputPaintPipeline` en el hilo de UI.
+diff; con el parche aplicado, el hilo de UI ya no aparece dentro de
+`CreateGuestOutputPaintPipeline` en los muestreos (antes: 150 de 569 muestras).
 
 ### `parche_cvar_plugin.py` — los cvars del plugin sobreviven a la caída de backend
 
@@ -228,9 +229,10 @@ El parche guarda la librería en `LoadedPlugins()` antes de devolver `null`: el 
 se conservan.
 
 **Comprobado:** aplicar → idempotente, `--estado` 1/1, `--revertir` deja el fichero sin
-diff; tras reconstruir, el log muestra `resolution_scale` aplicado una sola vez y el
-aviso `Vulkan draw resolution scaling is experimental` (prueba de que la escala del
-toml se respeta).
+diff; tras reconstruir, el log muestra el aviso `Vulkan draw resolution scaling is
+experimental` y `draw-scale swap sizing: ... active=2560x1440`, prueba de que la escala
+del toml se respeta (antes del parche, con `resolution_scale = 2`, no aparecía ninguno
+de los dos).
 
 ### `parche_sleep0.py` — sueño real en los sondeos con `Sleep(0)`
 
