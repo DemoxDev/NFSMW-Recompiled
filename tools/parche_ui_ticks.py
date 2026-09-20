@@ -46,11 +46,17 @@ reloj (std::chrono) al ritmo del modo de video del guest -video_mode_refresh_rat
 60 Hz por defecto, el mismo valor que usa el hilo del vblank- y la rama
 no-Windows de ForceUIThreadPaintTick.
 
+Respeta las mismas condiciones que la rama de Windows: el limite solo se
+aplica si AreUITicksNeededFromUIThread() dice que hace falta (hay dibujantes
+de UI y la presentacion no tiene vsync implicito; con FIFO esperar ademas por
+reloj desalinea el ritmo de fotogramas).
+
 El present del guest no espera: su peticion de pintado llama a
 ForceUIThreadPaintTick, que pone un aviso; la espera lo consulta cada
-milisegundo mientras duerme, asi que un fotograma del guest entra como mucho
-1 ms tarde. Es el mismo contrato que en Windows, donde el vblank interrumpe
-la espera.
+milisegundo mientras duerme -y lo consume si lo ve, para no regalar un
+pintado sin limite al fotograma siguiente-, asi que un fotograma del guest
+entra como mucho 1 ms tarde. Es el mismo contrato que en Windows, donde el
+vblank interrumpe la espera.
 
 Nota: el limite es por reloj y no por vblank real porque el SDK no tiene
 fuente de vblank fuera de DXGI; 60 Hz es ademas el ritmo al que el juego
@@ -95,8 +101,10 @@ ESTADO_NUEVO = """// PARCHE LOCAL - limite de ritmo de la UI fuera de Windows
 // dejara el sistema. Medido en un M1: ~200 pintados por segundo de 4.8 ms
 // cada uno, el hilo de UI al 100%, el refresh del guest esperando 30-43 ms
 // por swap y el juego a ~15 fps con la GPU al 60-70%.
+#if !REX_PLATFORM_WIN32
 static std::atomic<bool> g_ui_tick_force_requested{false};
 static std::atomic<int64_t> g_ui_tick_last_us{0};
+#endif  // !REX_PLATFORM_WIN32
 
 void Presenter::WaitForUITickFromUIThread() {
 """
@@ -123,10 +131,15 @@ ESPERA_NUEVO = """    dxgi_ui_tick_signal_condition_.wait(dxgi_ui_tick_lock);
 #else
   // PARCHE LOCAL - limite de ritmo de la UI fuera de Windows
   //
-  // Limite al ritmo del modo de video del guest (60 Hz por defecto, el mismo
-  // valor que usa el hilo del vblank). El present del guest no espera: su
-  // peticion pone el aviso de salto y la espera lo consulta cada milisegundo,
-  // igual que el vblank interrumpe la espera en Windows.
+  // Mismas condiciones que en Windows (AreUITicksNeededFromUIThread): solo
+  // hay algo que limitar si hay dibujantes de UI y la presentacion no tiene
+  // vsync implicito -si lo tiene, esperar ademas por reloj desalinea el
+  // ritmo-. Y el present del guest no espera: su peticion pone el aviso de
+  // salto y la espera lo consulta cada milisegundo, igual que el vblank
+  // interrumpe la espera en Windows.
+  if (!AreUITicksNeededFromUIThread()) {
+    return;
+  }
   if (g_ui_tick_force_requested.exchange(false, std::memory_order_acq_rel)) {
     return;
   }
@@ -139,7 +152,8 @@ ESPERA_NUEVO = """    dxgi_ui_tick_signal_condition_.wait(dxgi_ui_tick_lock);
   if (last_us != 0) {
     int64_t next_us = last_us + interval_us;
     while (next_us > now_us) {
-      if (g_ui_tick_force_requested.load(std::memory_order_acquire)) {
+      if (g_ui_tick_force_requested.exchange(false, std::memory_order_acq_rel)) {
+        // Consumido al salir: el pintado inmediato es este, no el siguiente.
         break;
       }
       std::this_thread::sleep_for(
