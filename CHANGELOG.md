@@ -12,6 +12,24 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
   el juego y arma `build/mac/` autocontenida y el bundle `NFSMW.app`.
   Documentación en `docs/macos.md`.
 
+### Arreglado
+
+- Rendimiento en macOS: la UI pintaba sin límite de ritmo fuera de Windows
+  (~200 pintados/s, el hilo de UI al 100%) y el refresh del guest esperaba
+  30-43 ms por swap, dejando el juego a ~15 fps con la GPU al 60-70%.
+  `parche_ui_ticks` limita la UI al ritmo del modo de video (60 Hz) y deja que
+  el present del guest salte el límite.
+- El pipeline del presentador se destruía y recreaba en cada pintado porque
+  `swapchain_format` no se asignaba nunca; en MoltenVK eso recompila el
+  SPIR-V a MSL cada fotograma. `parche_pipeline_pintado`.
+- Los cvars del plugin de GPU (`resolution_scale`, `anisotropic_override`,
+  `render_target_path_d3d12`, `vulkan_*`…) se perdían al caer al otro backend
+  y volvían a su valor por defecto, ignorando `nfsmw.toml` y la línea de
+  comandos. `parche_cvar_plugin`.
+- El sondeo con `Sleep(0)` del hilo principal gastaba ~1 núcleo entero como
+  `sched_yield`; el ajuste `guest_sleep0_us` que la app ya pedía no existía en
+  el SDK. `parche_sleep0`.
+
 ## [0.0.2] - 2026-09-17
 
 ### Añadido

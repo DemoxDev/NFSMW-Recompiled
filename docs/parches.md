@@ -160,6 +160,96 @@ con grep antes de escribirlos), aplicar → idempotente, `--revertir` restaura e
 desde los `.original`, reaplicar deja el mismo texto; y el build de la app enlaza con
 él (ver la sección macOS de [compilar.md](compilar.md)).
 
+### `parche_ui_ticks.py` — el ritmo de pintado de la UI fuera de Windows
+
+**El arreglo gordo del rendimiento en macOS.** Windows limita el ritmo de pintado de la
+UI al vblank del monitor en `Presenter::WaitForUITickFromUIThread`, con señales de
+DXGI; fuera de Windows esa función es un no-op (todo el cuerpo está bajo
+`#if REX_PLATFORM_WIN32`).
+
+Eso solo importa porque hay algo que pide repintados sin parar: `ImGuiDrawer::Draw`
+llama a `RequestUIPaintFromUIThread` en cada fotograma mientras haya cualquier diálogo
+registrado, y `ReXApp::LaunchModule` registra siempre el toast de logros —aunque no
+haya logros que mostrar—. Medido en un M1 con el juego en el modo demostración:
+
+- ~200 pintados de UI por segundo, 4.8 ms cada uno: el hilo de UI al 100%.
+- El refresh del guest (`RefreshGuestOutput`, el swap del juego) esperaba 30-43 ms por
+  fotograma.
+- El juego a ~15 fps con la GPU al 60-70%: no limitaba la GPU, limitaba la presentación.
+
+El parche implementa la rama no-Windows con un límite por reloj al ritmo del modo de
+vídeo del guest (`video_mode_refresh_rate`, 60 Hz por defecto, el mismo valor que usa
+el hilo del vblank). El present del guest no espera: `ForceUIThreadPaintTick` pone un
+aviso que la espera consulta cada milisegundo, el mismo contrato que el vblank en
+Windows. Con el límite puesto: refresh 7-14 ms, juego ~24 fps.
+
+**Comprobado:** aplicar → idempotente, `--estado` 3/3, `--revertir` deja
+`src/ui/presenter.cpp` con solo el hunk de `parche_fotogramas`; medido en el M1 antes y
+después (los números de arriba).
+
+### `parche_pipeline_pintado.py` — el pipeline del presentador, una vez por formato
+
+`GuestOutputPaintPipeline::swapchain_format` se queda en `VK_FORMAT_UNDEFINED` para
+siempre: nadie lo asigna. La comprobación que destruye el pipeline cuando el formato de
+la swapchain cambia veía "formato cambiado" en **cada** pintado, así que destruía el
+pipeline bueno y lo volvía a crear con `VK_NULL_HANDLE` de caché. En un driver nativo
+es caro; en MoltenVK, cada `vkCreateGraphicsPipelines` vuelve a traducir el SPIR-V a
+MSL y a crear el pipeline de Metal. Medido con `sample` en el M1: 150 de 569 muestras
+del hilo de UI dentro de `CreateGuestOutputPaintPipeline` → `vkCreateGraphicsPipelines`.
+
+El parche asigna el campo justo después de crear el pipeline; a partir de ahí se crea
+una vez por formato de swapchain, como estaba pensado.
+
+**Comprobado:** aplicar → idempotente, `--estado` 1/1, `--revertir` deja el fichero sin
+diff; el muestreo posterior ya no ve `CreateGuestOutputPaintPipeline` en el hilo de UI.
+
+### `parche_cvar_plugin.py` — los cvars del plugin sobreviven a la caída de backend
+
+En macOS (y en cualquier sitio donde el backend pedido no esté compilado) la app carga
+el plugin dos veces: pide `d3d12`, la fábrica devuelve `null` y vuelve a llamar con
+`vulkan`. La salida temprana destruía la `DynamicLibrary` local → `dlclose` → los
+destructores estáticos del plugin desregistraban sus cvars. El segundo `Load` los
+registraba otra vez, pero los valores pendientes de `nfsmw.toml` y de la línea de
+comandos ya se habían consumido en el primer registro y se perdían en silencio.
+
+Medido en el M1 con `resolution_scale = 2` en el toml:
+
+```
+[temp-cvar] late registration of 'resolution_scale': pending_found=true config=2 cmdline=2
+[temp-cvar] late registration of 'resolution_scale': pending_found=false config=<none> cmdline=<none>
+[temp-scale] resolution_scale=1 non_default=false ... effective=1x1
+```
+
+Lo mismo valía para `anisotropic_override`, `render_target_path_d3d12` y los `vulkan_*`.
+En Windows no se nota porque el plugin carga una sola vez.
+
+El parche guarda la librería en `LoadedPlugins()` antes de devolver `null`: el segundo
+`Load` reutiliza la misma imagen, no se re-ejecutan los estáticos y los valores puestos
+se conservan.
+
+**Comprobado:** aplicar → idempotente, `--estado` 1/1, `--revertir` deja el fichero sin
+diff; tras reconstruir, el log muestra `resolution_scale` aplicado una sola vez y el
+aviso `Vulkan draw resolution scaling is experimental` (prueba de que la escala del
+toml se respeta).
+
+### `parche_sleep0.py` — sueño real en los sondeos con `Sleep(0)`
+
+El hilo principal del juego sondea con `Sleep(0)` sin parar; `XThread::Delay` lo
+convierte en `MaybeYield()` (sched_yield) para prioridades normales. Instrumentando
+`Delay` en el M1: **1500-2450 sondeos por segundo consumiendo ~1000 ms de cada
+segundo** —un núcleo entero—. La app ya pedía un sueño de 50 µs por sondeo
+(`PonerSiNadieLoPidio("guest_sleep0_us", "50")` en `nfsmw_app.h`), pero el cvar no
+existía en este SDK.
+
+El parche añade `guest_sleep0_us` (µs, 0 = comportamiento de antes) y lo usa en la rama
+de timeout 0. Con 50 µs el coste baja a ~9% de un núcleo; la latencia por sondeo es de
+decenas de µs contra fotogramas de 16 ms. Con 0 el yield y el sueño de 100 µs de las
+prioridades bajas quedan exactamente como estaban.
+
+**Comprobado:** aplicar → idempotente, `--estado` 2/2, `--revertir` deja `xthread.cpp`
+con solo los hunks de los parches de diagnóstico; la línea `[sdk-delay]` del muestreo
+baja de ~1000 ms/s a decenas.
+
 ### `tools/diagnostico/parche_xma.py` — instrumentación pesada del XMA
 
 **Fuera del build por defecto.** Traza por segundo del hilo de audio, cada envío y cada
