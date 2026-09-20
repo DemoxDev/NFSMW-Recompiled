@@ -36,8 +36,11 @@ QUE HACE ESTE PARCHE
 Anade el cvar guest_sleep0_us (microsegundos, 0 = comportamiento de antes) y
 lo usa en XThread::Delay cuando el timeout del guest es 0. Con 50 us el coste
 del sondeo baja de ~100% a ~9% de un nucleo; la latencia que anade por sondeo
-es de decenas de microsegundos contra fotogramas de 16 ms. Con 0 el yield y
-el sueno de 100 us de las prioridades bajas quedan exactamente como estaban.
+es de decenas de microsegundos contra fotogramas de 16 ms.
+
+El cvar solo sustituye al yield de las prioridades normales. El sueno de
+100 us de las prioridades bajas se queda como estaba: esas ya dormian, y un
+valor menor las haria sondear mas, no menos.
 """
 
 import argparse
@@ -86,10 +89,10 @@ USO_ANCLA = """    if (timeout_ms == 0) {
 USO_NUEVO = """    if (timeout_ms == 0) {
       // PARCHE LOCAL - sueno real en los sondeos con Sleep(0)
       const int32_t sleep0_us = REXCVAR_GET(guest_sleep0_us);
-      if (sleep0_us > 0) {
-        rex::thread::Sleep(std::chrono::microseconds(sleep0_us));
-      } else if (priority_ <= rex::thread::ThreadPriority::kBelowNormal) {
+      if (priority_ <= rex::thread::ThreadPriority::kBelowNormal) {
         rex::thread::Sleep(std::chrono::microseconds(100));
+      } else if (sleep0_us > 0) {
+        rex::thread::Sleep(std::chrono::microseconds(sleep0_us));
       } else {
         rex::thread::MaybeYield();
       }
