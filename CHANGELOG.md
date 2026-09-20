@@ -29,6 +29,10 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 - El sondeo con `Sleep(0)` del hilo principal gastaba ~1 núcleo entero como
   `sched_yield`; el ajuste `guest_sleep0_us` que la app ya pedía no existía en
   el SDK. `parche_sleep0`.
+- El juego moría con una violación de acceso si no podía inicializar el audio
+  (CoreAudio atascado, por ejemplo tras dormir el Mac). Ahora el driver cae a
+  un modo silencioso que consume los fotogramas al ritmo del dispositivo: el
+  juego corre sin sonido en lugar de morir. `parche_audio_silencio`.
 
 ## [0.0.2] - 2026-09-17
 

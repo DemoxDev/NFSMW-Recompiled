@@ -242,14 +242,14 @@ this app is GPL-3.0 — all three are compatible in the same binary.
   `resolution_scale = 2` on the reference M1. Without them the UI repaints
   unthrottled off Windows (~200 paints/s) and starves the guest present:
   4–15 fps, which is what earlier builds showed.
-- **The game dies with `Unhandled guest access violation: read of guest
-  0x00000014` right after an `[apu]` error** — the game does not survive a
-  failed audio initialization, and CoreAudio can wedge after the Mac
-  sleeps: every client then fails with `AudioQueueStart: -66681` (`afplay`
-  fails too, system-wide). Wake the display (`caffeinate -u -t 2`) or
-  restart the Mac and the audio opens again; the crash is unrelated to the
-  game data or the build. A build that tolerates a missing audio device is
-  pending.
+- **`Audio device unavailable; continuing with silent audio` in the log** —
+  CoreAudio can wedge after the Mac sleeps: every client then fails with
+  `AudioQueueStart: -66681` (`afplay` fails too, system-wide). Since
+  `parche_audio_silencio` the game no longer crashes on that: it falls back
+  to a silent driver and keeps running at full speed without sound. Wake the
+  display (`caffeinate -u -t 2`) or restart the Mac to get the sound back.
+  Before that patch the failure ended in `Unhandled guest access violation:
+  read of guest 0x00000014`.
 - **Re-signing a used bundle fails** — the first run creates
   `Contents/MacOS/logs/`, and codesign treats everything under
   `Contents/MacOS` as code, so signing then fails. Don't re-sign a used

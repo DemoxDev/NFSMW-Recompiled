@@ -252,6 +252,39 @@ prioridades bajas quedan exactamente como estaban.
 con solo los hunks de los parches de diagnóstico; la línea `[sdk-delay]` del muestreo
 baja de ~1000 ms/s a decenas.
 
+### `parche_audio_silencio.py` — el juego corre sin sonido si no hay dispositivo
+
+El juego **no sobrevive a un fallo de inicialización de audio**: si
+`XAudioRegisterRenderDriverClient` devuelve error, desreferencia un puntero nulo y
+muere con una violación de acceso en el hilo principal. Medido en un M1: tras dormir
+el Mac, CoreAudio se quedó atascado (`AudioQueueStart -66681`, con `afplay` fallando
+igual — un problema del sistema, no del juego) y el arranque terminó en
+
+```
+[error] [apu] SDL_OpenAudioDeviceStream() failed: CoreAudio error (AudioQueueStart): -66681
+[error] [sys] Unhandled guest access violation: read of guest 0x00000014 on thread 0xF800002C
+```
+
+El código del juego viene del XEX y no se toca, así que se arregla la causa: que el
+registro del cliente no falle. Si el driver de SDL no consigue abrir el dispositivo
+(`InitSubSystem`, `OpenAudioDeviceStream`, `GetAudioStreamDevice` o
+`ResumeAudioDevice`), `CreateDriver` ya no devuelve error: arranca un driver
+silencioso que consume los fotogramas al ritmo real (256 muestras a 48 kHz) y los
+descarta, soltando el semáforo como haría el callback de SDL. El hilo de audio del
+juego sigue su ritmo; solo que no suena.
+
+El consumo lo hace un **hilo propio**, no `SubmitFrame`: `SubmitFrame` corre con el
+cerrojo global del audio cogido (`AudioSystem::SubmitFrame`), y dormir ahí dentro
+bloquea a cualquier otro hilo que toque el audio — la primera versión de este parche
+dejaba el juego a ~10 fps. El hilo de ritmo solo toca la cola del driver, igual que
+el callback de SDL, y se para y se une al apagar el driver.
+
+**Comprobado:** aplicar → idempotente, `--estado` 6/6, `--revertir` deja los tres
+ficheros sin diff. Forzando el fallo con `SDL_AUDIO_DRIVER=dummy` (no disponible):
+el log muestra `Audio device unavailable; continuing with silent audio`, no hay
+violación de acceso y el juego llega a 60 fps; con el dispositivo real sigue
+abriendo `MacBook Air Speakers` y sonando.
+
 ### `tools/diagnostico/parche_xma.py` — instrumentación pesada del XMA
 
 **Fuera del build por defecto.** Traza por segundo del hilo de audio, cada envío y cada
