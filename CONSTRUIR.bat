@@ -298,6 +298,22 @@ if not "!SALIDA!"=="0" (
     goto fin
 )
 
+rem nfsmw-nx: direct calls between game functions that have no hook (LTO can
+rem inline them), and the literal copies of the five game functions the native
+rem guards compare against, which are compiled in. Same as tools\codegen.sh.
+%PY% "%~dp0tools\llamadas_directas.py" --gen generated\default
+if errorlevel 1 (
+    popd
+    echo [ERROR] Fallo tools\llamadas_directas.py
+    goto fin
+)
+%PY% "%~dp0tools\copia_literal.py" generated\default src\copias_literales
+if errorlevel 1 (
+    popd
+    echo [ERROR] Fallo tools\copia_literal.py
+    goto fin
+)
+
 echo.
 echo -- Pasada 2: compilar --
 cmake --build --preset win-amd64-release
