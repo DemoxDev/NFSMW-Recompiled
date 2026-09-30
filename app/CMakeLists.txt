@@ -162,8 +162,26 @@ endif()
 # argument is no longer needed; it can still be passed to change it.
 rexglue_setup_target(nfsmw GPU_PLUGINS xenos)
 
+# With the SDK installed (the Linux flow here: find_package, REXSDK_DIR empty) a few headers the native
+# renderer needs are not in the install: renderdoc_app.h, the presenter's SPIR-V. They come from the SDK
+# source checkout next to this repository.
+if(REXSDK_DIR)
+    set(NFSMW_REXSDK_SRC "${REXSDK_DIR}")
+else()
+    set(NFSMW_REXSDK_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../../rexglue-sdk" CACHE PATH
+        "rexglue-sdk source tree, for the headers the SDK install does not ship")
+endif()
+
 # The SDK's FFmpeg (WMV3 decoder) for the cutscenes: nfsmw_video_wmv3.cpp.
-target_link_libraries(nfsmw PRIVATE libavcodec)
+if(TARGET libavcodec)
+    target_link_libraries(nfsmw PRIVATE libavcodec)
+else()
+    # Installed SDK package: it ships the FFmpeg libraries but not their headers, and without these the
+    # system's (newer) FFmpeg headers are picked up, whose AVCodecContext does not match the SDK's
+    # library: avcodec_open2 then rejects every video.
+    target_link_libraries(nfsmw PRIVATE rex::libavcodec)
+    target_include_directories(nfsmw BEFORE PRIVATE "${NFSMW_REXSDK_SRC}/thirdparty/FFmpeg")
+endif()
 
 # PC build with the SDK as a subdirectory (tools/pc/construir_pc.bat):
 # rex_app.cpp includes imgui.h and rexruntime links imgui privately, so its
@@ -171,6 +189,9 @@ target_link_libraries(nfsmw PRIVATE libavcodec)
 # the SDK installed the headers are already in its include directory (the target does not exist there).
 # The same goes for renderdoc_app.h, which rex/ui/vulkan/instance.h includes outside
 # Switch (nfsmw_nativo_sistema.cpp uses the SDK's Vulkan device).
+if(NOT REXGLUE_PLATFORM_SWITCH AND NOT TARGET renderdoc)
+    target_include_directories(nfsmw PRIVATE "${NFSMW_REXSDK_SRC}/thirdparty/renderdoc")
+endif()
 if(NOT REXGLUE_PLATFORM_SWITCH AND TARGET imgui)
     target_include_directories(nfsmw PRIVATE
         $<TARGET_PROPERTY:imgui,INTERFACE_INCLUDE_DIRECTORIES>)
@@ -182,10 +203,10 @@ endif()
 
 # Precompiled SPIR-V of the SDK presenter: nfsmw_nativo_destinos.cpp uses it to draw
 # the game image into the presenter output.
-target_include_directories(nfsmw PRIVATE "${REXSDK_DIR}/src/ui/shaders")
+target_include_directories(nfsmw PRIVATE "${NFSMW_REXSDK_SRC}/src/ui/shaders")
 
 # The SDK's xxHash: fingerprints for the shader library and the native renderer.
-find_path(NFSMW_XXHASH_INCLUDE xxhash.h HINTS "${REXSDK_DIR}/thirdparty/xxHash" NO_CMAKE_FIND_ROOT_PATH REQUIRED)
+find_path(NFSMW_XXHASH_INCLUDE xxhash.h HINTS "${NFSMW_REXSDK_SRC}/thirdparty/xxHash" NO_CMAKE_FIND_ROOT_PATH REQUIRED)
 target_include_directories(nfsmw PRIVATE "${NFSMW_XXHASH_INCLUDE}")
 
 # Experimental library: the synthetic tests do not validate the full game.
