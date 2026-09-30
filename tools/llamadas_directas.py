@@ -22,8 +22,10 @@ import sys
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GEN = os.path.join(RAIZ, 'app', 'generated', 'default')
-FUENTES = [os.path.join(RAIZ, 'app', 'src'), os.path.join(RAIZ, 'sdk', 'src'),
-           os.path.join(RAIZ, 'sdk', 'include'), os.path.join(RAIZ, 'app', 'overrides.toml'),
+# The SDK is a sibling checkout here (../rexglue-sdk), not sdk/ as in nfsmw-nx.
+SDK = os.environ.get('REXSDK_DIR', os.path.join(os.path.dirname(RAIZ), 'rexglue-sdk'))
+FUENTES = [os.path.join(RAIZ, 'app', 'src'), os.path.join(SDK, 'src'),
+           os.path.join(SDK, 'include'), os.path.join(RAIZ, 'app', 'overrides.toml'),
            os.path.join(RAIZ, 'app', 'huecos.toml'), os.path.join(RAIZ, 'app', 'nfsmw_manifest.toml'),
            os.path.join(RAIZ, 'app', 'CMakeLists.txt')]
 

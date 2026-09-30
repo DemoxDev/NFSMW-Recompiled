@@ -746,7 +746,9 @@
 "0x826879B8" = { end = 0x82687AF0 }
 "0x826DFD24" = { end = 0x826DFDE0, share_registers = true }
 "0x826DFDE8" = { end = 0x826DFF08 }
-"0x826E0320" = { end = 0x826E05BC, share_registers = true }
+# PAL English: the tail of this switch runs to 0x826E05F0 and branches back to 0x826E059C and
+# 0x826E05A8; the Spanish end (0x826E056C -> 0x826E05BC) left those three branches unresolved.
+"0x826E0320" = { end = 0x826E05F0, share_registers = true }
 "0x826E11A0" = { end = 0x826E1454, share_registers = true }
 "0x826E4280" = { end = 0x826E44C8 }
 "0x826EDC28" = { end = 0x826EE560 }

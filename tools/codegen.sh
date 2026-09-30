@@ -10,9 +10,15 @@
 set -e
 RAIZ=$(cd "$(dirname "$0")/.." && pwd)
 APP=$RAIZ/${1:?usage: tools/codegen.sh <app folder> [hooked functions] [address table]}
-REXGLUE=${REXGLUE:?set REXGLUE to the rexglue executable built from sdk/}
-PY=${PYTHON:-python}
+REXGLUE=${REXGLUE:?set REXGLUE to the rexglue executable built from the SDK}
+PY=${PYTHON:-$(command -v python3 || echo python)}
 cd "$APP"
+# First run: seed the function partition with the one the PAL English PGO profile was recorded with,
+# so every nfsmw_recomp.N.cpp holds the functions its .gcda expects (tools/editions/pal_en/pal_en.py).
+if [ ! -f generated/default/codegen.partition.json ]; then
+  mkdir -p generated/default
+  "$PY" "$RAIZ/tools/editions/pal_en/pal_en.py" reparto generated/default/codegen.partition.json
+fi
 echo "== codegen ($APP)"
 "$REXGLUE" codegen nfsmw_manifest.toml > codegen.log 2>&1 || { echo "codegen failed, see $APP/codegen.log"; exit 1; }
 cd "$RAIZ"
