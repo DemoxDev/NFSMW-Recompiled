@@ -90,7 +90,7 @@ void AnotarDibujoVideo(const uint8_t* base, bool esVideo, uint32_t objeto) {
     std::lock_guard lock(g_mutex);
     g_listo.reset();
     if (!esVideo || !g_capturado || g_capturado->objeto != objeto || !Rango(objeto,264)) return;
-    // sub_826D8408 copies these same 120 bytes to the vertex buffer.
+    // sub_826D8458 copies these same 120 bytes to the vertex buffer.
     for (size_t i = 0; i < 6; ++i) {
       auto leer = [&](unsigned j) { return std::bit_cast<float>(BE(base,objeto+144+uint32_t(i)*20+j*4)); };
       auto& v = g_capturado->vertices[i]; v = {leer(0),leer(1),leer(2),leer(3),leer(4)};
@@ -116,10 +116,10 @@ std::shared_ptr<const FotogramaVideo> ConsumirVideo() {
 }
 }
 
-REX_EXTERN(__imp__sub_82589DF0);
-REX_HOOK_RAW(sub_82589DF0) {
-  const bool video = ctx.lr == 0x826DB5C4 && ctx.r27.u32 == 0;
+REX_EXTERN(__imp__sub_82589E38);
+REX_HOOK_RAW(sub_82589E38) {
+  const bool video = ctx.lr == 0x826DB614 && ctx.r27.u32 == 0;
   const uint32_t objeto = ctx.r31.u32, datos = ctx.r25.u32;
-  __imp__sub_82589DF0(ctx, base);
+  __imp__sub_82589E38(ctx, base);
   if (video) nfsmw::native::CapturarPlanosVideo(base,objeto,datos);
 }

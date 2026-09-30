@@ -1,4 +1,4 @@
-// nfsmw - start of an effect pass (sub_82448E80) in native code.
+// nfsmw - start of an effect pass (sub_82448EA8) in native code.
 //
 // WHAT IT IS (PowerPC read instruction by instruction in nfsmw_recomp.94.cpp:16601-17040)
 //   Called by the thread that runs the frames (Main XThread) every time a draw changes effect pass: from
@@ -14,7 +14,7 @@
 //      the original).
 //   3. The pass's vertex shader ([[r25+72]]): AddRef (+4), releases the one the device kept at
 //      [dev+20456] (8259_B9B8), stores it there and sets it (8259_C150). Then the pixel shader,
-//      [[r25+76]], with SetPixelShader (sub_8259BDC0, through its hook in nfsmw_d3d_trace.cpp, like the
+//      [[r25+76]], with SetPixelShader (sub_8259BE08, through its hook in nfsmw_d3d_trace.cpp, like the
 //      original).
 //   4. The pass's render states ([r26+16] 8-byte entries from r26+20): function [dev+96+offset] (dev,
 //      value). The sampler states ([r30+128] entries from r30+132): function [dev+484+offset] (dev,
@@ -80,21 +80,21 @@
 #include <string>
 
 REXCVAR_DEFINE_BOOL(nfsmw_efecto_pasada_nativo, true, "NFSMW",
-                    "Inicio de pasada de un efecto (sub_82448E80: mascaras de sucio, sombreadores y estados de render y "
+                    "Inicio de pasada de un efecto (sub_82448EA8: mascaras de sucio, sombreadores y estados de render y "
                     "de muestreo) en nativo (build 185), identico. Se comprueba en seco contra una copia literal de la "
                     "original (las primeras 20.000 llamadas, las primeras 2.000 de cada camino raro y despues 1 de cada "
                     "4096) y se apaga sola si difiere; false = la original")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REX_EXTERN(__imp__sub_82448E80);  // la original
-REX_EXTERN(sub_8259BDC0);         // SetPixelShader through its hook (nfsmw_d3d_trace.cpp), like the original
+REX_EXTERN(__imp__sub_82448EA8);  // la original
+REX_EXTERN(sub_8259BE08);         // SetPixelShader through its hook (nfsmw_d3d_trace.cpp), like the original
 // Releasing the shader (8259_B9B8) and setting it (8259_C150): the originals, called directly, as the
 // generated code calls them. The name is assembled from parts on purpose: tools/llamadas_directas.py treats
 // any address that appears whole in app/src as hooked, and its calls from the rest of the game must remain
 // direct (__imp__, inlinable).
 #define NFSMW_PASADA_UNIR_(a, b) a##b
-#define NFSMW_PASADA_LIBERAR NFSMW_PASADA_UNIR_(__imp__sub_8259, B9B8)
-#define NFSMW_PASADA_VERTICES NFSMW_PASADA_UNIR_(__imp__sub_8259, C150)
+#define NFSMW_PASADA_LIBERAR NFSMW_PASADA_UNIR_(__imp__sub_8259, BA00)
+#define NFSMW_PASADA_VERTICES NFSMW_PASADA_UNIR_(__imp__sub_8259, C198)
 REX_EXTERN(NFSMW_PASADA_LIBERAR);
 REX_EXTERN(NFSMW_PASADA_VERTICES);
 
@@ -143,12 +143,12 @@ namespace {
 constexpr uint32_t kMarco = 176;                              // stwu r1,-176(r1)
 constexpr uint32_t kPilaVigilada = kMarco + 32;               // [r1-176, r1+32): the frame and r1+20/+28 (196 and 204)
 constexpr uint32_t kGlobal = (uint32_t(-32114) << 16) + 2880;  // lis r11,-32114; lwz r11,2880(r11)
-constexpr uint32_t kVueltaPrologo = 0x82448E88;               // bl __savegprlr_24 (the generated code does not execute it)
-constexpr uint32_t kVueltaLiberar = 0x82448FA8;
-constexpr uint32_t kVueltaVertices = 0x82448FB8;
-constexpr uint32_t kVueltaPixeles = 0x82448FC8;
-constexpr uint32_t kVueltaEstados = 0x82448FF8;
-constexpr uint32_t kVueltaMuestreo = 0x82449044;
+constexpr uint32_t kVueltaPrologo = 0x82448EB0;               // bl __savegprlr_24 (the generated code does not execute it)
+constexpr uint32_t kVueltaLiberar = 0x82448FD0;
+constexpr uint32_t kVueltaVertices = 0x82448FE0;
+constexpr uint32_t kVueltaPixeles = 0x82448FF0;
+constexpr uint32_t kVueltaEstados = 0x82449020;
+constexpr uint32_t kVueltaMuestreo = 0x8244906C;
 
 enum Que : uint32_t { kLiberar = 0, kSombreadorVertices = 1, kSombreadorPixeles = 2, kIndirecta = 3 };
 
@@ -176,7 +176,7 @@ struct Reales {
     } else if (que == kSombreadorVertices) {
       NFSMW_PASADA_VERTICES(ctx, base);
     } else {
-      sub_8259BDC0(ctx, base);
+      sub_8259BE08(ctx, base);
     }
   }
   [[gnu::always_inline]] static inline void Indirecta(PPCContext& ctx, uint8_t* base, uint32_t destino) {
@@ -184,7 +184,7 @@ struct Reales {
   }
 };
 
-// The ORs of the masks (loc_82449058, rare path): the 18 reads before the 9 writes, like the original, and
+// The ORs of the masks (loc_82449080, rare path): the 18 reads before the 9 writes, like the original, and
 // registers v0-v13 and r3-r11 as it leaves them (vN of the context = the 16 guest bytes reversed).
 [[gnu::noinline]] void Mascaras(PPCContext& ctx, uint8_t* base, uint64_t r31, uint64_t r26, uint64_t r30) {
   const simde__m128i vuelta = simde_mm_load_si128((simde__m128i*)VectorMaskL);
@@ -256,7 +256,7 @@ struct Reales {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// The whole of sub_82448E80. L = Reales (for real) or Grabador (the guard, dry run). Returns the path (kCamino*).
+// The whole of sub_82448EA8. L = Reales (for real) or Grabador (the guard, dry run). Returns the path (kCamino*).
 // ---------------------------------------------------------------------------------------------------------------
 template <class L>
 uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
@@ -286,15 +286,15 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   E32(base, marco + 88, uint32_t(r26));                 // stw r26,88(r1)
   E32(base, marco + 92, uint32_t(r30));                 // stw r30,92(r1)
   bool reinicio = true;
-  if (uint32_t(r11) != 0) {                             // cmplwi cr6,r11,0; beq loc_82448ED4
-    if (uint32_t(r25) == 0) {                           // cmplwi cr6,r25,0; beq loc_82448F78
+  if (uint32_t(r11) != 0) {                             // cmplwi cr6,r11,0; beq loc_82448EFC
+    if (uint32_t(r25) == 0) {                           // cmplwi cr6,r25,0; beq loc_82448FA0
       reinicio = false;
     } else {
       r11 = L32(base, uint32_t(r11) + 8);               // lwz r11,8(r11)
-      reinicio = uint32_t(r25) != uint32_t(r11);        // cmplw cr6,r25,r11; beq loc_82448F78
+      reinicio = uint32_t(r25) != uint32_t(r11);        // cmplw cr6,r25,r11; beq loc_82448FA0
     }
   }
-  if (reinicio) {                                       // --- loc_82448ED4: dirty masks to all ones ---
+  if (reinicio) {                                       // --- loc_82448EFC: dirty masks to all ones ---
     camino |= kCaminoReinicio;
     AnticiparEscritura(base, L32(base, uint32_t(r31) + 256) & ~127u);  // the second buffer (hint: it is reread in its place)
     simde_mm_store_si128((simde__m128i*)ctx.v0.u32, simde_mm_set1_epi32(int(0xFFFFFFFF)));  // vspltisw v0,-1
@@ -302,10 +302,10 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     const uint64_t r9 = L32(base, uint32_t(r31) + 288);  // lwz r9,288(r31)
     ctx.r9.u64 = r9;
     uint64_t r10 = 0;                                   // li r10,0
-    if (uint32_t(r9) != 0) {                            // cmplwi cr6,r9,0; ble loc_82448F08
+    if (uint32_t(r9) != 0) {                            // cmplwi cr6,r9,0; ble loc_82448F30
       uint64_t r8;
       r11 = r31;                                        // mr r11,r31
-      do {                                              // loc_82448EF0
+      do {                                              // loc_82448F18
         Rellenar(base, uint32_t(r11) & ~0xFu, 0xFF, 16);  // stvx v0,r0,r11 (v0 = all ones)
         r8 = L32(base, uint32_t(r31) + 288);            // lwz r8,288(r31)
         r10 += 2;                                       // addi r10,r10,2
@@ -314,14 +314,14 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
       ctx.r8.u64 = r8;
     }
     ctx.r10.u64 = r10;
-    r11 = L32(base, kGlobal);                           // loc_82448F08: lis r11,-32114; lwz r11,2880(r11)
+    r11 = L32(base, kGlobal);                           // loc_82448F30: lis r11,-32114; lwz r11,2880(r11)
     bool segundo = true;
-    if (uint32_t(r11) != 0) {                           // cmpwi cr6,r11,0; beq loc_82448F24
+    if (uint32_t(r11) != 0) {                           // cmpwi cr6,r11,0; beq loc_82448F4C
       const uint64_t r7 = L32(base, uint32_t(r31) + 696);  // lwz r7,696(r31)
       ctx.r7.u64 = r7;
-      segundo = uint32_t(r7) == 0;                      // cmplwi cr6,r7,0; bne loc_82448F78
+      segundo = uint32_t(r7) == 0;                      // cmplwi cr6,r7,0; bne loc_82448FA0
     }
-    if (segundo) {                                      // --- loc_82448F24: the buffer at [this+256] ---
+    if (segundo) {                                      // --- loc_82448F4C: the buffer at [this+256] ---
       camino |= kCaminoSegundo;
       const uint64_t r6 = L32(base, uint32_t(r31) + 256);  // lwz r6,256(r31)
       ctx.r6.u64 = r6;
@@ -330,9 +330,9 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
       const uint64_t r5 = L32(base, uint32_t(r31) + 292);  // lwz r5,292(r31)
       ctx.r5.u64 = r5;
       E32(base, marco + 80, 0);                         // stw r11,80(r1)
-      if (uint32_t(r5) != 0) {                          // cmplwi cr6,r5,0; ble loc_82448F78
+      if (uint32_t(r5) != 0) {                          // cmplwi cr6,r5,0; ble loc_82448FA0
         uint64_t r3, r4, r9b, r10b;
-        do {                                            // loc_82448F40: the counter on the stack, like the original
+        do {                                            // loc_82448F68: the counter on the stack, like the original
           r4 = L32(base, uint32_t(r31) + 256);          // lwz r4,256(r31)
           r3 = __builtin_rotateleft64(uint32_t(r11) | (r11 << 32), 3) & 0xFFFFFFF8u;  // rlwinm r3,r11,3,0,28
           Rellenar(base, (uint32_t(r4) + uint32_t(r3)) & ~0xFu, 0xFF, 16);  // stvx128 v0,r4,r3
@@ -355,7 +355,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   }
   ctx.r11.u64 = r11;
 
-  // --- loc_82448F78: the vertex shader ---
+  // --- loc_82448FA0: the vertex shader ---
   const uint64_t r8 = L32(base, uint32_t(r25) + 72);    // lwz r8,72(r25)
   ctx.r8.u64 = r8;
   const uint64_t r29 = L32(base, uint32_t(r31) + 700);  // lwz r29,700(r31): the device
@@ -370,21 +370,21 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
       AnticiparDespacho(base, funcion);
     }
   }
-  if (uint32_t(r28) != 0) {                             // cmplwi cr6,r28,0; beq loc_82448F98
+  if (uint32_t(r28) != 0) {                             // cmplwi cr6,r28,0; beq loc_82448FC0
     const uint64_t cuenta = L32(base, uint32_t(r28) + 4);  // lwz r11,4(r28)
     const uint64_t r7 = cuenta + 1;                     // addi r7,r11,1: AddRef
     ctx.r11.u64 = cuenta;
     ctx.r7.u64 = r7;
     E32(base, uint32_t(r28) + 4, uint32_t(r7));         // stw r7,4(r28)
   }
-  const uint64_t viejo = L32(base, uint32_t(r29) + 20456);  // loc_82448F98: lwz r3,20456(r29)
+  const uint64_t viejo = L32(base, uint32_t(r29) + 20456);  // loc_82448FC0: lwz r3,20456(r29)
   ctx.r3.u64 = viejo;
-  if (uint32_t(viejo) != 0) {                           // cmplwi cr6,r3,0; beq loc_82448FA8
+  if (uint32_t(viejo) != 0) {                           // cmplwi cr6,r3,0; beq loc_82448FD0
     camino |= kCaminoLiberar;
     ctx.lr = kVueltaLiberar;
     L::Llamar(ctx, base, kLiberar);                     // bl 8259_B9B8: lo suelta
   }
-  ctx.r4.u64 = r28;                                     // loc_82448FA8: mr r4,r28
+  ctx.r4.u64 = r28;                                     // loc_82448FD0: mr r4,r28
   E32(base, uint32_t(r29) + 20456, uint32_t(r28));      // stw r28,20456(r29)
   ctx.r3.u64 = r29;                                     // mr r3,r29
   ctx.lr = kVueltaVertices;
@@ -401,12 +401,12 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   // --- The render states: [r26+16] 8-byte entries from r26+20 ---
   const uint64_t r5 = L32(base, uint32_t(r26) + 16);    // lwz r5,16(r26)
   ctx.r5.u64 = r5;
-  if (uint32_t(r5) != 0) [[unlikely]] {                 // cmplwi cr6,r5,0; ble loc_8244900C
+  if (uint32_t(r5) != 0) [[unlikely]] {                 // cmplwi cr6,r5,0; ble loc_82449034
     camino |= kCaminoEstados;
     uint64_t r28b = r26 + 20;                           // addi r28,r26,20
     uint64_t r27 = 0;                                   // li r27,0
     uint64_t r9;
-    do {                                                // loc_82448FDC
+    do {                                                // loc_82449004
       const uint64_t desplazamiento = L32(base, uint32_t(r28b));  // lwz r11,0(r28)
       ctx.r3.u64 = r29;                                 // mr r3,r29
       ctx.r4.u64 = L32(base, uint32_t(r28b) + 4);       // lwz r4,4(r28)
@@ -423,16 +423,16 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     } while (uint32_t(r27) < uint32_t(r9));             // cmplw cr6,r27,r9; blt
   }
 
-  // --- loc_8244900C: the sampler states: [r30+128] 8-byte entries from r30+132 ---
+  // --- loc_82449034: the sampler states: [r30+128] 8-byte entries from r30+132 ---
   const uint64_t r8b = L32(base, uint32_t(r30) + 128);  // lwz r8,128(r30)
   ctx.r8.u64 = r8b;
   ctx.r11.u64 = r30 + 132;                              // addi r11,r30,132
-  if (uint32_t(r8b) != 0) {                             // cmplwi cr6,r8,0; ble loc_82449058
+  if (uint32_t(r8b) != 0) {                             // cmplwi cr6,r8,0; ble loc_82449080
     camino |= kCaminoMuestreo;
     uint64_t r28c = r30 + 132 + 2;                      // addi r28,r11,2
     uint64_t r27 = 0;                                   // li r27,0
     uint64_t total = r8b;
-    do {                                                // loc_82449024
+    do {                                                // loc_8244904C
       const uint64_t r11d = L16(base, uint32_t(r28c));  // lhz r11,0(r28)
       ctx.r11.u64 = r11d;
       ctx.r3.u64 = r29;                                 // mr r3,r29
@@ -455,16 +455,16 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     } while (uint32_t(r27) < uint32_t(total));          // cmplw cr6,r27,r5; blt
   }
 
-  // --- loc_82449058: the OR masks ---
+  // --- loc_82449080: the OR masks ---
   const uint64_t r4 = L32(base, uint32_t(r31) + 692);   // lwz r4,692(r31)
   ctx.r4.u64 = r4;
   const uint64_t r3 = uint32_t(r4) & 0x3u;              // clrlwi r3,r4,30
   ctx.r3.u64 = r3;
-  if (r3 != 0) [[unlikely]] {                           // cmplwi cr6,r3,0; beq loc_82449138
+  if (r3 != 0) [[unlikely]] {                           // cmplwi cr6,r3,0; beq loc_82449160
     camino |= kCaminoMascaras;
     Mascaras(ctx, base, r31, r26, r30);
   }
-  // --- loc_82449138 ---
+  // --- loc_82449160 ---
   E32(base, uint32_t(r31) + 532, uint32_t(r24));        // stw r24,532(r31)
   E32(base, uint32_t(r31) + 536, uint32_t(r25));        // stw r25,536(r31)
   ctx.r1.s64 = ctx.r1.s64 + kMarco;                     // addi r1,r1,176 (and b __restgprlr_24: it just returns)
@@ -707,7 +707,7 @@ struct Grabador {
   static void Indirecta(PPCContext& ctx, uint8_t* base, uint32_t destino) { Grabar(ctx, kIndirecta, destino); }
 };
 
-// ==== LITERAL COPY of sub_82448E80 (tools/copia_literal.py): the generated code without comments; the calls
+// ==== LITERAL COPY of sub_82448EA8 (tools/copia_literal.py): the generated code without comments; the calls
 // ==== go through the policy. Do not edit by hand: the tool rebuilds it from the current generated code.
 #define NFSMW_PASADA_LLAMAR(c, b, que) Llamadas::Llamar(c, b, que)
 #define NFSMW_PASADA_INDIRECTA(c, b, destino) Llamadas::Indirecta(c, b, destino)
@@ -770,7 +770,7 @@ void Informe() {
   }
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[efecto_pasada] inicio de pasada de efecto (sub_82448E80) {}",
+    REXLOG_INFO("[efecto_pasada] inicio de pasada de efecto (sub_82448EA8) {}",
                 Activo() ? "en nativo (build 185): empieza comprobando contra la copia literal de la original"
                          : "por la original (nfsmw_efecto_pasada_nativo = false)");
     return;
@@ -867,14 +867,14 @@ std::string Diferencia(const Foto& a, const Foto& b) {
   if (g_comprobando.exchange(true, std::memory_order_acquire)) {  // another thread is in the guard
     Sumar(g_saltadas, uint64_t(1));
     Sumar(g_originales[kPorComprobacion], uint64_t(1));
-    __imp__sub_82448E80(ctx, base);
+    __imp__sub_82448EA8(ctx, base);
     return;
   }
   if (!CalcularZonas(ctx, base, z)) {
     g_comprobando.store(false, std::memory_order_release);
     Sumar(g_saltadas, uint64_t(1));
     Sumar(g_originales[kPorComprobacion], uint64_t(1));
-    __imp__sub_82448E80(ctx, base);
+    __imp__sub_82448EA8(ctx, base);
     return;
   }
   uint8_t* const antes = g_antes;
@@ -935,7 +935,7 @@ std::string Diferencia(const Foto& a, const Foto& b) {
   }
   const bool demasiadas = copia.n > kMaxLlamadas;
   g_comprobando.store(false, std::memory_order_release);
-  __imp__sub_82448E80(ctx, base);  // the real original, from the entry: its state is kept
+  __imp__sub_82448EA8(ctx, base);  // the real original, from the entry: its state is kept
   Sumar(g_originales[kPorComprobacion], uint64_t(1));
   if (que.empty() && demasiadas) {
     Sumar(g_saltadas, uint64_t(1));  // too many calls to compare them all
@@ -1003,7 +1003,7 @@ void InicioPasada(PPCContext& ctx, uint8_t* base) {
   }
   if (!Activo() || g_apagado.load(std::memory_order_relaxed)) [[unlikely]] {
     Sumar(g_originales[kPorApagada], uint64_t(1));
-    __imp__sub_82448E80(ctx, base);
+    __imp__sub_82448EA8(ctx, base);
     return;
   }
   if (n <= kComprobaciones || (n & (kPeriodo - 1)) == 0) [[unlikely]] {
@@ -1021,7 +1021,7 @@ void InicioPasada(PPCContext& ctx, uint8_t* base) {
   }
   if ((n & (kMedidaOriginal - 1)) == kMedidaOriginal / 2) [[unlikely]] {
     const int64_t t0 = AhoraNs();
-    __imp__sub_82448E80(ctx, base);
+    __imp__sub_82448EA8(ctx, base);
     Sumar(g_ns_original, uint64_t(AhoraNs() - t0));
     Sumar(g_muestras_original, uint64_t(1));
     Sumar(g_originales[kPorMedida], uint64_t(1));
@@ -1040,8 +1040,8 @@ void InicioPasada(PPCContext& ctx, uint8_t* base) {
 
 }  // namespace nfsmw::efecto_pasada_nativo
 
-// The four calls in the generated code go to sub_82448E80 (the patch turns them from __imp__ back to sub_),
+// The four calls in the generated code go to sub_82448EA8 (the patch turns them from __imp__ back to sub_),
 // and the dispatch table of the indirect calls already points here.
-REX_HOOK_RAW(sub_82448E80) {  // start of an effect pass
+REX_HOOK_RAW(sub_82448EA8) {  // start of an effect pass
   nfsmw::efecto_pasada_nativo::InicioPasada(ctx, base);
 }

@@ -2,7 +2,7 @@
 //
 // In the 216 frames over 45 ms of one console run almost nobody is working: the main thread waits for the
 // preparer's handoff, the PM4 ring runs out of work or waits for the GPU, and the preparer sleeps inside
-// sub_826E8EE8 (COM-style virtual calls, unidentified). Each wait adds its time here, and the "[tiron]" line
+// sub_826E8F38 (COM-style virtual calls, unidentified). Each wait adds its time here, and the "[tiron]" line
 // (nfsmw_nativo_destinos.cpp) writes how much each one took in that frame.
 // It only costs two clock reads per wait, and those waits sleep anyway.
 
@@ -14,23 +14,23 @@
 namespace nfsmw::esperas {
 
 enum Tipo : uint32_t {
-  kRelevoEjecutor,    // Main XThread waiting for the preparer to hand over the frame (sub_8262D988)
-  kRelevoPreparador,  // the preparer waiting for the executor to finish the previous one (sub_8262D988)
-  kSitioAnillo,       // the D3D waiting for the ring to advance (sub_825A5D18)
-  kJuegoMedio,        // the game inside sub_826E8EE8
+  kRelevoEjecutor,    // Main XThread waiting for the preparer to hand over the frame (sub_8262D9D0)
+  kRelevoPreparador,  // the preparer waiting for the executor to finish the previous one (sub_8262D9D0)
+  kSitioAnillo,       // the D3D waiting for the ring to advance (sub_825A5D60)
+  kJuegoMedio,        // the game inside sub_826E8F38
   kAnilloSinTrabajo,  // the ring thread with no packets to read
   kAnilloRegMem,      // the ring thread in a WAIT_REG_MEM (waiting for the game to write)
   // The game's side in the stutter frame ("[tiron] juego" line).
-  kEjecutorSinOrdenes,   // Main XThread with the list open and no new commands (sub_823C83F8)
-  kPreparadorLista,      // the preparer filling the command list (all of sub_82445660: culling and eView)
+  kEjecutorSinOrdenes,   // Main XThread with the list open and no new commands (sub_823C8420)
+  kPreparadorLista,      // the preparer filling the command list (all of sub_82445688: culling and eView)
   kPreparadorFuera,      // the preparer between two fills: its simulation plus its handoff wait
-  kPreparadorEscenario,  // TreeCull (sub_824C2F48) with its DrawAScenery calls, inside the fill
+  kPreparadorEscenario,  // TreeCull (sub_824C2F70) with its DrawAScenery calls, inside the fill
   kNumTipos
 };
 
 inline std::atomic<uint64_t> g_ns[kNumTipos];
 inline std::atomic<uint64_t> g_veces[kNumTipos];
-inline std::atomic<uint32_t> g_vtabla_medio{0};    // vtable of the object of the last call to sub_826E8EE8
+inline std::atomic<uint32_t> g_vtabla_medio{0};    // vtable of the object of the last call to sub_826E8F38
 inline std::atomic<uint32_t> g_llamante_medio{0};  // and its return address
 
 // What the ring re-checks of the textures (XXH3 of the guest bytes) and how many checks are postponed by

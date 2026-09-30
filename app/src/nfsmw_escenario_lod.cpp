@@ -7,19 +7,19 @@
 //   the switch changes geometry and texture, and it is a pointer swap without a fade: pop.
 //
 // WHERE IT IS IN THE RECOMPILED BINARY
-//   sub_824C2850 = ScenerySectionHeader::DrawAScenery   app/generated/default/nfsmw_recomp.70.cpp:18095
-//     :18292  call to sub_824C2720 (InlinedViewGetPixelSize) -> returns pixel_size in r3
+//   sub_824C2878 = ScenerySectionHeader::DrawAScenery   app/generated/default/nfsmw_recomp.70.cpp:18095
+//     :18292  call to sub_824C2748 (InlinedViewGetPixelSize) -> returns pixel_size in r3
 //             and writes the distance to the camera into the float r6 points to
 //     :18391  lfs f7,80(r1)      <- that distance
 //     :18395  lfs f13,3552(r27)  <- constant at 0x82062AC8 (r27 = 0x82061CE8)
-//     :18410  blt -> 0x824C2A88  <- if distance < K: full mesh, nothing else is checked
+//     :18410  blt -> 0x824C2AB0  <- if distance < K: full mesh, nothing else is checked
 //     :18412  lfs f13,-4396(r27) <- the 8.7f, at 0x82060BBC
-//     :18417  blt -> 0x824C2AC8  <- if pixel_size/max(Density,6) < 8.7: reduced mesh
-//   sub_824C2720 = InlinedViewGetPixelSize              app/generated/default/nfsmw_recomp.4.cpp:18706
+//     :18417  blt -> 0x824C2AF0  <- if pixel_size/max(Density,6) < 8.7: reduced mesh
+//   sub_824C2748 = InlinedViewGetPixelSize              app/generated/default/nfsmw_recomp.4.cpp:18706
 //   A single caller in the whole binary: nfsmw_recomp.70.cpp:18292, inside DrawAScenery.
 //
 // WHY THE HOOK IS HERE AND NOT IN DrawAScenery
-//   The distance sub_824C2720 writes is only read in that comparison. The return value
+//   The distance sub_824C2748 writes is only read in that comparison. The return value
 //   (pixel_size) is not touched, so neither the 18 px cutoff nor the branches for the
 //   rear-view mirror / cubemap / shadows (which go by ExcludeFlags 0x1800 and 0x20 and do not
 //   look at the distance) move.
@@ -146,14 +146,14 @@ void EscribirFlotante(uint8_t* base, uint32_t dir, float f) {
 // InlinedViewGetPixelSize(SceneryCullInfo* r3, bVector3* position r4, float radius f1, float* out r6)
 // Returns the size in pixels in r3 and writes the camera-object distance to *r6.
 // =================================================================================================
-REX_EXTERN(__imp__sub_824C2720);
-REX_HOOK_RAW(sub_824C2720) {
+REX_EXTERN(__imp__sub_824C2748);
+REX_HOOK_RAW(sub_824C2748) {
   using namespace nfsmw::escenario_lod;
 
   const uint32_t cull = ctx.r3.u32;
   const uint32_t salida = ctx.r6.u32;
 
-  __imp__sub_824C2720(ctx, base);
+  __imp__sub_824C2748(ctx, base);
 
   const int32_t adelanto = REXCVAR_GET(nfsmw_escenario_detalle);
   if (adelanto == 0 || salida == 0 || cull == 0) {
@@ -161,7 +161,7 @@ REX_HOOK_RAW(sub_824C2720) {
   }
   ++g_entradas;
   // If the object does not reach the 18 px bar, DrawAScenery discards it (nfsmw_recomp.70.cpp:18355,
-  // `cmpwi r3,18` + `blt loc_824C2B3C`): it does not draw it even with the reduced mesh. So there is
+  // `cmpwi r3,18` + `blt loc_824C2B64`): it does not draw it even with the reduced mesh. So there is
   // nothing to gain here and we save the work.
   if (ctx.r3.s32 < kPixelMinimoRamaNormal) {
     return;
@@ -221,5 +221,5 @@ std::string Resumen() {
 // reduced mesh; the triangles of each mesh come from eSolid+0x14 (NumPolys).
 // This gives the exact cost (triangles and draws) before raising the setting.
 // =================================================================================================
-// REX_EXTERN(__imp__sub_824C2850);
-// REX_HOOK_RAW(sub_824C2850) { ... }
+// REX_EXTERN(__imp__sub_824C2878);
+// REX_HOOK_RAW(sub_824C2878) { ... }

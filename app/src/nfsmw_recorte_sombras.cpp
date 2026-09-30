@@ -7,9 +7,9 @@
 //  ~584 of ~1,820 draws. It is an optional trade of image quality for FPS.
 //
 //  The pass (recompiled code)
-//    sub_82443B18  shadow pass. Called by sub_82445660 (race) and
-//                  sub_82444D80 (menus). It leaves its parameters in globals
-//                  and queues on the render queue (sub_823C8378) the commands
+//    sub_82443B40  shadow pass. Called by sub_82445688 (race) and
+//                  sub_82444DA8 (menus). It leaves its parameters in globals
+//                  and queues on the render queue (sub_823C83A0) the commands
 //                  for one or two shadow maps; in a race it draws both within
 //                  the same call, it does not alternate between frames.
 //  If a frame does not call it, the maps keep what was last drawn and the
@@ -38,7 +38,7 @@ REXCVAR_DEFINE_INT32(nfsmw_sombras_cada, 1, "NFSMW",
 /*
  * One cascade instead of two.
  *
- * sub_82443B18 takes a boolean in r4: with 0 it draws one shadow map, otherwise two. The game itself passes
+ * sub_82443B40 takes a boolean in r4: with 0 it draws one shadow map, otherwise two. The game itself passes
  * 0 in the menus and 1 in a race. They are two complete 1600x1600 maps (views 13 and 14 of the table at
  * 0x82A38070), not two halves of one.
  *
@@ -141,7 +141,7 @@ REXCVAR_DEFINE_INT32(nfsmw_guardia_30_presupuesto_us, 31000, "NFSMW",
  *     35 * (1 + H / PixelMinSize)
  *
  * `PixelMinSize` is field +36 of the view (view 13 at 0x82A38644 and view 14 at 0x82A386B4, view table at
- * 0x82A38070 with 112 bytes per entry) and the game recomputes it every frame in sub_8243EC28, so it has
+ * 0x82A38070 with 112 bytes per entry) and the game recomputes it every frame in sub_8243EC50, so it has
  * to be written afterwards: right here, in the pass hook, which runs after that recomputation and before
  * drawing.
  *
@@ -211,7 +211,7 @@ std::atomic<bool> g_anotado{false};
  * The cutoff used to compound itself.
  *
  * An earlier version read PixelMinSize and wrote read * percentage / 100. That only works if the game
- * recomputes it between two of our calls. sub_8243EC28 does recompute it (it writes it as an integer at
+ * recomputes it between two of our calls. sub_8243EC50 does recompute it (it writes it as an integer at
  * vista+36: `fctiwz f9,f10` + `stfiwx f9,0,r9`), but nothing guarantees that it runs every frame or in
  * every mode. As soon as it skips one, with cutoff = 200 the value doubles again, and again, until it
  * saturates at 4096: from then on no object casts a shadow and the map comes out empty. Silently, because
@@ -391,8 +391,8 @@ std::atomic<int32_t> g_mapas_anotado{2};
 }  // namespace
 }  // namespace nfsmw::recorte_sombras
 
-REX_EXTERN(__imp__sub_82443B18);
-REX_HOOK_RAW(sub_82443B18) {
+REX_EXTERN(__imp__sub_82443B40);
+REX_HOOK_RAW(sub_82443B40) {
   using namespace nfsmw::recorte_sombras;
   // A single map, which is what the game itself does in the menus (r4 = 0).
   if (nfsmw::guardia30::MapasEfectivos(REXCVAR_GET(nfsmw_sombras_mapas)) <= 1) {
@@ -407,14 +407,14 @@ REX_HOOK_RAW(sub_82443B18) {
   const int32_t cada = REXCVAR_GET(nfsmw_sombras_cada);
   if (cada <= 1) {
     g_cada_anotado.store(1, std::memory_order_relaxed);
-    __imp__sub_82443B18(ctx, base);
+    __imp__sub_82443B40(ctx, base);
     return;
   }
   if (g_cada_anotado.exchange(cada, std::memory_order_relaxed) != cada) {
     REXLOG_INFO("[recortes] sombras: se actualizan 1 de cada {} fotogramas", cada);
   }
   if (g_llamadas.fetch_add(1, std::memory_order_relaxed) % uint32_t(cada) == 0) {
-    __imp__sub_82443B18(ctx, base);
+    __imp__sub_82443B40(ctx, base);
   }
 }
 
@@ -433,8 +433,8 @@ REX_HOOK_RAW(sub_82443B18) {
  * 0x82A380E0), the same one nfsmw_recortes_carrera.cpp uses. It saves CPU and GPU at once because the
  * object never even reaches the draw list.
  *
- * Where it is written. The game recomputes it in sub_8243EC28 (`fctiwz` + `stfiwx` on vista+36), which
- * sub_82441100 calls once per active view per frame with the view in r4. So the hook goes on that function
+ * Where it is written. The game recomputes it in sub_8243EC50 (`fctiwz` + `stfiwx` on vista+36), which
+ * sub_82441128 calls once per active view per frame with the view in r4. So the hook goes on that function
  * and writes afterwards: the value read there is always the freshly recomputed one, never ours, and so,
  * unlike the shadow cutoff, there is no need to save the original here: an absolute value is written and
  * it cannot compound itself.
@@ -513,7 +513,7 @@ double Corte(double h, double p) { return p > 0.0 ? kRadioDelJuego * (1.0 + h / 
 
 }  // namespace
 
-/* Called right after sub_8243EC28, with the view it just recomputed. */
+/* Called right after sub_8243EC50, with the view it just recomputed. */
 void Aplicar(uint8_t* base, uint32_t vista) {
   if (vista != kDireccionEscena) {
     return;
@@ -551,13 +551,13 @@ void Aplicar(uint8_t* base, uint32_t vista) {
 
 /*
  * eView::Update (or equivalent): recomputes the view passed in r4 and leaves PixelMinSize at +0x24.
- * sub_82441100 calls it once per active view per frame, before drawing anything. Hooking here is the
+ * sub_82441128 calls it once per active view per frame, before drawing anything. Hooking here is the
  * only way to guarantee our value is the last one written.
  */
-REX_EXTERN(__imp__sub_8243EC28);
-REX_HOOK_RAW(sub_8243EC28) {
+REX_EXTERN(__imp__sub_8243EC50);
+REX_HOOK_RAW(sub_8243EC50) {
   const uint32_t vista = ctx.r4.u32;  // r4 may be clobbered inside: save it first
-  __imp__sub_8243EC28(ctx, base);
+  __imp__sub_8243EC50(ctx, base);
   nfsmw::escena_detalle::Aplicar(base, vista);
 }
 
@@ -566,12 +566,12 @@ REX_HOOK_RAW(sub_8243EC28) {
  *  The menu with shadows, so it can be tested on the PC (nfsmw_prueba_menu_sombras)
  * =================================================================================================
  *
- * sub_824455B8 draws the menu scene and chooses between two paths:
- *   sub_82444D80  the garage with the shadow pass (sub_82443B18 with r4 = 0: one 1600x1600 map)
- *   sub_82445300  the same garage without the shadow pass
- * It takes the first one if sub_822D71A8(*(0x82A2C900), 0x82077C2C) finds the object, its +28 is not null,
- * that object's +120 is 0 and the global pointer 0x82A2D1B4 is null (sub_8245DD60 fills it when opening a
- * video with sub_826D76A8, and sub_82287380 and sub_8245DE38 release it).
+ * sub_824455E0 draws the menu scene and chooses between two paths:
+ *   sub_82444DA8  the garage with the shadow pass (sub_82443B40 with r4 = 0: one 1600x1600 map)
+ *   sub_82445328  the same garage without the shadow pass
+ * It takes the first one if sub_822D71B8(*(0x82A2C900), 0x82077C2C) finds the object, its +28 is not null,
+ * that object's +120 is 0 and the global pointer 0x82A2D1B4 is null (sub_8245DD88 fills it when opening a
+ * video with sub_826D76F8, and sub_82287390 and sub_8245DE60 release it).
  *
  * On the console, with the profile loaded, it takes the first one (07CEA000 and 086AE000 resolved in 99 %
  * of menu frames). On the PC, without a profile, it takes the second: not a single shadow pass, which is
@@ -610,28 +610,28 @@ void Escribir32(uint8_t* base, uint32_t dir, uint32_t valor) {
 }  // namespace
 }  // namespace nfsmw::prueba_menu_sombras
 
-REX_EXTERN(__imp__sub_822D71A8);
-REX_EXTERN(__imp__sub_82444D80);
-REX_EXTERN(__imp__sub_824455B8);
+REX_EXTERN(__imp__sub_822D71B8);
+REX_EXTERN(__imp__sub_82444DA8);
+REX_EXTERN(__imp__sub_824455E0);
 
 // The menu scene with shadows: only counted.
-REX_HOOK_RAW(sub_82444D80) {
+REX_HOOK_RAW(sub_82444DA8) {
   nfsmw::prueba_menu_sombras::g_con_sombras.fetch_add(1, std::memory_order_relaxed);
-  __imp__sub_82444D80(ctx, base);
+  __imp__sub_82444DA8(ctx, base);
 }
 
-REX_HOOK_RAW(sub_824455B8) {
+REX_HOOK_RAW(sub_824455E0) {
   using namespace nfsmw::prueba_menu_sombras;
   if (!REXCVAR_GET(nfsmw_prueba_menu_sombras)) {
-    __imp__sub_824455B8(ctx, base);
+    __imp__sub_824455E0(ctx, base);
     return;
   }
-  // The four conditions, as the game checks them. sub_822D71A8 is a list search that moves the found item
+  // The four conditions, as the game checks them. sub_822D71B8 is a list search that moves the found item
   // to the front: calling it once more changes nothing. The registers are restored as they were.
   const PPCContext guardado = ctx;
   ctx.r3.u64 = Leer32(base, kListaFrontal);
   ctx.r4.u64 = kNombreFrontal;
-  __imp__sub_822D71A8(ctx, base);
+  __imp__sub_822D71B8(ctx, base);
   const uint32_t objeto = ctx.r3.u32;
   ctx = guardado;
   const uint32_t hijo = objeto ? Leer32(base, objeto + 28) : 0;
@@ -643,7 +643,7 @@ REX_HOOK_RAW(sub_824455B8) {
     ++g_forzadas;
     Escribir32(base, kPelicula, 0);
   }
-  __imp__sub_824455B8(ctx, base);
+  __imp__sub_824455E0(ctx, base);
   if (solo_video && Leer32(base, kPelicula) == 0) {
     Escribir32(base, kPelicula, pelicula);  // restored if nobody changed it inside
   }

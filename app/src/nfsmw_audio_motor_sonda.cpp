@@ -12,13 +12,13 @@
 //    does not read the disc.
 //  - Each .gin has a 68-byte synthesizer (vtable 0x82072490) with two buffers of rate x 0.011 samples
 //    (11 ms) in a 2620-byte workspace (sub_8220B110). It registers with the game's sound engine as a
-//    user stream with the callback sub_8220ABF8 (sub_825D9768) and starts its voice with priority 101
-//    (sub_8220B378 -> sub_825D98B0).
-//  - When the voice consumes a buffer, the audio server thread (sub_825ED350, per packet) drains the queue
-//    sub_825DA1E0, which calls sub_8220ABF8(r3 = buffer, r4 = synthesizer) -> sub_8220AC08 through a pointer.
+//    user stream with the callback sub_8220ABF8 (sub_825D97B0) and starts its voice with priority 101
+//    (sub_8220B378 -> sub_825D98F8).
+//  - When the voice consumes a buffer, the audio server thread (sub_825ED398, per packet) drains the queue
+//    sub_825DA228, which calls sub_8220ABF8(r3 = buffer, r4 = synthesizer) -> sub_8220AC08 through a pointer.
 //    That function refills the buffer by decoding the .gin from RAM (sub_8220AB10 and sub_8220A138, 32-sample
-//    blocks) and queues it again (sub_825D9C58).
-//  - If the voice asks for more samples than are queued, sub_825FDC38 gives it nothing for that packet: with
+//    blocks) and queues it again (sub_825D9CA0).
+//  - If the voice asks for more samples than are queued, sub_825FDC80 gives it nothing for that packet: with
 //    no consumption there is no callback, and with no callback there is no new buffer.
 //  - Per frame, CARSFX_DualGinsuEng (vtable 0x82072498) runs sub_821F69E0 and, through its method +64,
 //    sub_821F74B0: Ac voice volume = (gain [ctl+60] x DMX) >> 23 and Dc voice volume = ([ctl+64] x DMX) >> 23,
@@ -72,7 +72,7 @@ using nfsmw::audio_nativo::Leer16;
 using nfsmw::audio_nativo::Leer32;
 using nfsmw::audio_nativo::LeerFloat;
 
-// The game's sound engine (sub_825D9768, sub_825D9C58, sub_825DD8B0, sub_825FBC68, sub_825FDC38).
+// The game's sound engine (sub_825D97B0, sub_825D9CA0, sub_825DD8F8, sub_825FBCB0, sub_825FDC80).
 constexpr uint32_t kTablaFlujos = 0x82A2AD38 + 772;  // pointers to the user streams, by index
 constexpr uint32_t kSnd = 0x82A2B1D0;  // +14 number of streams (byte), +48 number of voices (16 bits), +136 voices
 constexpr uint32_t kTamVoz = 132;      // voice: +0 handle, +4 first physical voice, +56 volume, +105 in use,
@@ -195,9 +195,9 @@ struct Voz {
   uint32_t sint = 0;
   uint32_t manejador = 0;    // [this+104] o [this+128]
   int32_t volumen = 0;       // [this+136] o [this+140], 0..127
-  bool valida = false;       // the same check as sub_825DD8B0
+  bool valida = false;       // the same check as sub_825DD8F8
   int32_t tono = 0;          // [voz+128]
-  float volumen_snd = -1.0f; // [voz fisica+56] (inferido de sub_825D93D0)
+  float volumen_snd = -1.0f; // [voz fisica+56] (inferido de sub_825D9418)
   uint32_t tasa = 0;         // [s+36]; 0 = the synthesizer has the voice stopped (sub_8220B6A0)
   uint32_t n = 0;            // [s+20], samples per buffer
   uint32_t pos = 0;          // [s+44], read pointer in the .gin
@@ -571,7 +571,7 @@ void AlActualizar(uint8_t* base, uint32_t objeto, bool doble) {
 }  // namespace nfsmw::audio_motor_sonda
 
 // Callback of the Ginsu synthesizer (r3 = buffer to refill, r4 = synthesizer). Called through a pointer by
-// the queue sub_825DA1E0 on the audio server thread; the original only swaps r3 and r4 and jumps to
+// the queue sub_825DA228 on the audio server thread; the original only swaps r3 and r4 and jumps to
 // sub_8220AC08.
 REX_EXTERN(__imp__sub_8220ABF8);
 REX_HOOK_RAW(sub_8220ABF8) {

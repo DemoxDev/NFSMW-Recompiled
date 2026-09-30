@@ -76,16 +76,16 @@ const Shader* ShaderOriginal(std::span<const uint8_t> contenedor) {
 // These constructors receive the original contiguous container in r3 and return
 // the object in r3 (or zero). The hash is computed before the driver's copies.
 // The original function always runs and no PPC register is modified.
-REX_EXTERN(__imp__sub_8259BC90);
-REX_HOOK_RAW(sub_8259BC90) {
+REX_EXTERN(__imp__sub_8259BCD8);
+REX_HOOK_RAW(sub_8259BCD8) {
   const auto* shader = nfsmw::native::Identificar(base, ctx.r3.u32, false);
-  __imp__sub_8259BC90(ctx, base);
+  __imp__sub_8259BCD8(ctx, base);
   nfsmw::native::Recordar(ctx.r3.u32, shader);
 }
 
-REX_EXTERN(__imp__sub_8259C038);
-REX_HOOK_RAW(sub_8259C038) {
+REX_EXTERN(__imp__sub_8259C080);
+REX_HOOK_RAW(sub_8259C080) {
   const auto* shader = nfsmw::native::Identificar(base, ctx.r3.u32, true);
-  __imp__sub_8259C038(ctx, base);
+  __imp__sub_8259C080(ctx, base);
   nfsmw::native::Recordar(ctx.r3.u32, shader);
 }

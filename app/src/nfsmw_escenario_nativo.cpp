@@ -1,8 +1,8 @@
-// nfsmw - ScenerySectionHeader::DrawAScenery (sub_824C2850) in native code.
+// nfsmw - ScenerySectionHeader::DrawAScenery (sub_824C2878) in native code.
 //
 // WHAT IT IS (PowerPC read instruction by instruction in nfsmw_recomp.70.cpp:18450-19374)
 //   Called by the thread that prepares the frames (XThreadA6918080 in one console log; not the Main
-//   XThread, which runs them) from TreeCull (sub_824C2F48), sub_824C3078 and sub_824C2EE8: once per
+//   XThread, which runs them) from TreeCull (sub_824C2F70), sub_824C30A0 and sub_824C2F10: once per
 //   candidate scenery object of each view. In a race, 87,500 calls per second on average and 124,000 in the
 //   alley. r3 = ScenerySectionHeader, r4 = instance number, r5 = SceneryCullInfo, r6 = visibility state
 //   (1 = partial). 304-byte frame.
@@ -10,9 +10,9 @@
 //      and the instance's bit in the table [r3+48] says "not visible", out.
 //   2. The instance's ExcludeFlags (+24) against the view's (+132), mask 0x080000FF (with 0x08000040 if
 //      the instance carries 0x08000000 or 0x40): if any match, out.
-//   3. Partial visibility: the instance's box at r1+80 and r1+112 and GetVisibleState (sub_8243E7D8,
+//   3. Partial visibility: the instance's box at r1+80 and r1+112 and GetVisibleState (sub_8243E800,
 //      through its hook).
-//   4. InlinedViewGetPixelSize (sub_824C2720, a single caller: inlined here): the distance to the camera,
+//   4. InlinedViewGetPixelSize (sub_824C2748, a single caller: inlined here): the distance to the camera,
 //      written to r1+80, and the size in pixels (fctiwz, which goes through r1-16).
 //   5. The mesh: threshold of 32 px (23 in view 20 with 0x1000) in views with 0x800 or 0x1000, 32 with
 //      0x20, 23 with view mode >= 3 and 18 in the normal camera, where LOD decides: distance < K
@@ -50,7 +50,7 @@
 //     local variables in the generated code, and the frame back link), the box, the distance, the fctiwz
 //     at r1-16, the std of the size, the std of the rotation at r1-32, -24 and -16, the matrix allocator
 //     (0x82A2C3B4 and, when out of space, 0x82A2C3C4/C8), the matrix, the SceneryDrawInfo and [cull+140].
-//   - Registers: the three callers (TreeCull, sub_824C3078 and sub_824C2EE8) only read local variables
+//   - Registers: the three callers (TreeCull, sub_824C30A0 and sub_824C2F10) only read local variables
 //     after the call, and through their return r3 and f1 stay live (the liveness analysis over all the
 //     generated code gives the same after GetVisibleState in those functions). r3, f1, r1, r12 and lr are
 //     left as the original leaves them; GetVisibleState and the wind functions touch them themselves.
@@ -83,24 +83,24 @@
 #include <string>
 
 REXCVAR_DEFINE_BOOL(nfsmw_escenario_nativo, true, "NFSMW",
-                    "ScenerySectionHeader::DrawAScenery (sub_824C2850: culling, tamano en pixeles, LOD y SceneryDrawInfo "
+                    "ScenerySectionHeader::DrawAScenery (sub_824C2878: culling, tamano en pixeles, LOD y SceneryDrawInfo "
                     "de cada objeto de escenario) en nativo (build 184), identico bit a bit. Se comprueba contra la "
                     "original (las primeras 100.000 llamadas, las primeras 5.000 con viento y despues 1 de cada 4096) "
                     "y se apaga sola si difiere; false = la original")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-// The LOD setting of nfsmw_escenario_lod.cpp (its hook of sub_824C2720). Nonzero: the original runs, since
+// The LOD setting of nfsmw_escenario_lod.cpp (its hook of sub_824C2748). Nonzero: the original runs, since
 // it uses it.
 REXCVAR_DECLARE(int32_t, nfsmw_escenario_detalle);
 
-REX_EXTERN(__imp__sub_824C2850);  // la original
-REX_EXTERN(sub_8243E7D8);         // GetVisibleState through its hook, like the original (itself native)
+REX_EXTERN(__imp__sub_824C2878);  // la original
+REX_EXTERN(sub_8243E800);         // GetVisibleState through its hook, like the original (itself native)
 // CreateWindRotMatrix and bMulMatrix, the originals. The name is assembled from parts on purpose:
 // tools/llamadas_directas.py treats any address that appears whole in app/src as hooked, and their calls
 // from the generated code must remain direct (__imp__, inlinable).
 #define NFSMW_ESCENARIO_UNIR_(a, b) a##b
-#define NFSMW_ESCENARIO_VIENTO NFSMW_ESCENARIO_UNIR_(__imp__sub_824F, D7C0)
-#define NFSMW_ESCENARIO_MULTIPLICAR NFSMW_ESCENARIO_UNIR_(__imp__sub_8263, D020)
+#define NFSMW_ESCENARIO_VIENTO NFSMW_ESCENARIO_UNIR_(__imp__sub_824F, D7E8)
+#define NFSMW_ESCENARIO_MULTIPLICAR NFSMW_ESCENARIO_UNIR_(__imp__sub_8263, D070)
 REX_EXTERN(NFSMW_ESCENARIO_VIENTO);
 REX_EXTERN(NFSMW_ESCENARIO_MULTIPLICAR);
 
@@ -180,7 +180,7 @@ constexpr uint32_t kUno = 0x82063038;              // lfs f29,4944(r27): the w o
 constexpr uint32_t kAlturaExtra = 0x82063970;      // lfs f0,7304(r27): EnvMapShadowExtraHeight
 constexpr uint32_t kSesenta = 0x82057114;          // lfs f0,28948(0x82050000): the 60 of the wind
 constexpr uint32_t kCero = 0x82061CE8;             // lfs f13,7400(0x82060000) of the rotation: the w column
-constexpr uint32_t kEscalaRotacion = 0x820AFF50;   // lfs f0,-176(0x820B0000) of the rotation: 1/8192
+constexpr uint32_t kEscalaRotacion = 0x820AFF60;   // lfs f0,-176(0x820B0000) of the rotation: 1/8192
 constexpr uint32_t kModoVista = 0x82A2CEE4;        // lwz r11,-12572(0x82A30000): eGetCurrentViewMode()
 constexpr uint32_t kReservaActual = 0x82A2C3B4;    // eFrameMalloc: the free pointer
 constexpr uint32_t kReservaFin = 0x82A2C3B8;       //   y su final
@@ -190,14 +190,14 @@ constexpr uint32_t kVistas = 0x82A38070;           // addi r26,r11,-32656 con r1
 constexpr uint32_t kVista1 = kVistas + 112;        // eGetView(1)
 constexpr uint32_t kVista2 = kVistas + 224;        // eGetView(2)
 constexpr uint32_t kMagia360 = 0xB60B60B7u;        // lis r4,-18933; ori r10,r4,24759: divide by 360
-constexpr uint32_t kVueltaPrologo = 0x824C2858;    // bl __savegprlr_22 (the generated code does not execute it)
-constexpr uint32_t kVueltaVisible = 0x824C2968;
-constexpr uint32_t kVueltaPixeles = 0x824C299C;
-constexpr uint32_t kVueltaReserva = 0x824C2B58;
-constexpr uint32_t kVueltaRotacion = 0x824C2B70;
-constexpr uint32_t kVueltaViento = 0x824C2C74;
-constexpr uint32_t kVueltaMultiplicar = 0x824C2C84;
-constexpr uint32_t kVueltaMarcador = 0x824C2CE8;
+constexpr uint32_t kVueltaPrologo = 0x824C2880;    // bl __savegprlr_22 (the generated code does not execute it)
+constexpr uint32_t kVueltaVisible = 0x824C2990;
+constexpr uint32_t kVueltaPixeles = 0x824C29C4;
+constexpr uint32_t kVueltaReserva = 0x824C2B80;
+constexpr uint32_t kVueltaRotacion = 0x824C2B98;
+constexpr uint32_t kVueltaViento = 0x824C2C9C;
+constexpr uint32_t kVueltaMultiplicar = 0x824C2CAC;
+constexpr uint32_t kVueltaMarcador = 0x824C2D10;
 
 // [inicio, inicio + n) toca la pila vigilada [pila - kPila, pila)?
 [[gnu::always_inline]] inline bool EnPila(uint32_t inicio, uint32_t n, uint32_t pila) {
@@ -253,7 +253,7 @@ inline bool Activo() {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// The whole of sub_824C2850. kGuardia: called by Comprobar (nothing is left to the guard because of the wind).
+// The whole of sub_824C2878. kGuardia: called by Comprobar (nothing is left to the guard because of the wind).
 // ---------------------------------------------------------------------------------------------------------------
 template <bool kGuardia>
 Salida Nativa(PPCContext& ctx, uint8_t* base) {
@@ -289,7 +289,7 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
     ctx.lr = lre;
     return {false, motivo, 0};
   };
-  // loc_824C2B3C: addi r1,r1,304; lfd f29-f31 (disableFlushMode); b __restgprlr_22.
+  // loc_824C2B64: addi r1,r1,304; lfd f29-f31 (disableFlushMode); b __restgprlr_22.
   const auto salir = [&](uint32_t camino) -> Salida {
     ctx.r1.s64 = ctx.r1.s64 + kMarco;
     ctx.fpscr.disableFlushMode();
@@ -353,14 +353,14 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
     ctx.r4.s64 = ctx.r1.s64 + 80;
     ctx.r3.u64 = Leer32(base, cull + 128);     // lwz r3,128(r25): la vista
     ctx.lr = kVueltaVisible;
-    sub_8243E7D8(ctx, base);                   // GetVisibleState
+    sub_8243E800(ctx, base);                   // GetVisibleState
     visibilidad = ctx.r3.u64;                  // mr r26,r3
     if (int32_t(uint32_t(visibilidad)) == 0) {
       return salir(kDescarte);
     }
   }
 
-  // --- 4. InlinedViewGetPixelSize (sub_824C2720), inlined and operation by operation ---
+  // --- 4. InlinedViewGetPixelSize (sub_824C2748), inlined and operation by operation ---
   ctx.fpscr.disableFlushMode();  // the one of "lfs f8,56(r31)" (GetVisibleState exits with flush on)
   Barrera();                     // no computation before this point
   const uint32_t w_radio = Leer32(base, info + 56);
@@ -382,7 +382,7 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
   const double seis = Lfs(w_seis);                            // f31
   const double radio = double(float(Lfs(w_radio) + seis));    // fadds f1,f8,f31
   ctx.f1.f64 = radio;
-  ctx.lr = kVueltaPixeles;                                    // bl 0x824c2720
+  ctx.lr = kVueltaPixeles;                                    // bl 0x824c2748
   PPCRegister menos;
   menos.f64 = radio;
   menos.u64 ^= 0x8000000000000000ull;                         // fneg f11,f1
@@ -427,7 +427,7 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
 
   // --- 5. La malla (r28) ---
   uint32_t modelo;
-  if ((banderas_vista & 0x800u) != 0 || (banderas_vista & 0x1000u) != 0) {  // loc_824C2A90
+  if ((banderas_vista & 0x800u) != 0 || (banderas_vista & 0x1000u) != 0) {  // loc_824C2AB8
     const uint32_t vista = Leer32(base, cull + 128);
     int32_t umbral = 32;
     if (int32_t(Leer32(base, vista + 4)) == 20 && (banderas_vista & 0x1000u) != 0) {
@@ -437,9 +437,9 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
       return salir(kDescarte);
     }
     if ((banderas & 0x80u) != 0) {
-      modelo = Leer32(base, info + 48);                                    // loc_824C2AC8
+      modelo = Leer32(base, info + 48);                                    // loc_824C2AF0
     } else if ((banderas & 0x100u) != 0 || (banderas & 0x1000000u) != 0) {
-      modelo = Leer32(base, info + 40);                                    // loc_824C2AF8
+      modelo = Leer32(base, info + 40);                                    // loc_824C2B20
     } else {
       modelo = Leer32(base, info + 52);
     }
@@ -453,12 +453,12 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
       return salir(kDescarte);
     }
     modelo = Leer32(base, info + 48);
-  } else {                                                                  // loc_824C2A10
+  } else {                                                                  // loc_824C2A38
     if (pixeles < 18) {
       return salir(kDescarte);
     }
     const uint32_t buena = Leer32(base, info + 40);                        // r10 = pModel[0]
-    modelo = buena;                                                         // loc_824C2A88 if there are no more
+    modelo = buena;                                                         // loc_824C2AB0 if there are no more
     if (buena != 0) {
       const uint32_t solido = Leer32(base, buena + 12);
       if (solido != 0 && int32_t(int16_t(Leer16(base, solido + 20))) >= 40) {
@@ -480,14 +480,14 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
         const double cociente = double(float(f4 / densidad));              // fdivs f0,f4,f0
         if (!cerca) {                                                      // blt cr6 -> la buena
           const double umbral_lod = Lfs(w_umbral);                         // lfs f13,-4396(r27)
-          if (cociente < umbral_lod || std::isnan(cociente)) {             // blt / bso -> loc_824C2AC8
+          if (cociente < umbral_lod || std::isnan(cociente)) {             // blt / bso -> loc_824C2AF0
             modelo = Leer32(base, info + 48);                              // la reducida
           }
         }
       }
     }
   }
-  if (modelo == 0) {                                                        // loc_824C2AFC: cmplwi cr6,r28,0; beq
+  if (modelo == 0) {                                                        // loc_824C2B24: cmplwi cr6,r28,0; beq
     return salir(kDescarte);
   }
 
@@ -507,7 +507,7 @@ Salida Nativa(PPCContext& ctx, uint8_t* base) {
     return salir(kSinMatriz);
   }
 
-  // --- 7. With a matrix (loc_824C2B50). Before writing anything outside the stack: flares, wind, constants ---
+  // --- 7. With a matrix (loc_824C2B78). Before writing anything outside the stack: flares, wind, constants ---
   const uint32_t vista = Leer32(base, cull + 128);
   const bool vista_1_o_2 = vista == kVista1 || vista == kVista2;
   const uint32_t solido = Leer32(base, modelo + 12);
@@ -644,7 +644,7 @@ void Informe() {
   }
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[escenario] DrawAScenery (sub_824C2850) {}",
+    REXLOG_INFO("[escenario] DrawAScenery (sub_824C2878) {}",
                 Activo() ? "en nativo (build 184): empieza comprobando contra la original"
                          : "por la original (nfsmw_escenario_nativo = false)");
     return;
@@ -701,7 +701,7 @@ std::string Hex(const uint8_t* bytes, uint32_t n) {
   const uint32_t cull = ctx.r5.u32;
   if (pila < kPila || EnPila(cull, 200, pila)) {
     Sumar(g_originales[kPorPila], uint64_t(1));
-    __imp__sub_824C2850(ctx, base);
+    __imp__sub_824C2878(ctx, base);
     return;
   }
   // Snapshots from before. The stack in a per-thread buffer (1.5 KB x 2); the rest is small.
@@ -749,7 +749,7 @@ std::string Hex(const uint8_t* bytes, uint32_t n) {
     deshacer();
     volver_a_la_entrada();
     Sumar(g_originales[s.motivo], uint64_t(1));
-    __imp__sub_824C2850(ctx, base);
+    __imp__sub_824C2878(ctx, base);
     return;
   }
   for (uint32_t i = 0; i < nz; ++i) {
@@ -759,7 +759,7 @@ std::string Hex(const uint8_t* bytes, uint32_t n) {
   const uint32_t csrn = ctx.fpscr.csr;
   deshacer();
   volver_a_la_entrada();
-  __imp__sub_824C2850(ctx, base);
+  __imp__sub_824C2878(ctx, base);
 
   const char* que = nullptr;
   const Zona* mala = nullptr;
@@ -829,12 +829,12 @@ void DrawAScenery(PPCContext& ctx, uint8_t* base) {
   }
   if (!Activo() || g_apagado.load(std::memory_order_relaxed)) [[unlikely]] {
     Sumar(g_originales[kPorApagada], uint64_t(1));
-    __imp__sub_824C2850(ctx, base);
+    __imp__sub_824C2878(ctx, base);
     return;
   }
   if (REXCVAR_GET(nfsmw_escenario_detalle) != 0) [[unlikely]] {
     Sumar(g_originales[kPorDetalle], uint64_t(1));
-    __imp__sub_824C2850(ctx, base);
+    __imp__sub_824C2878(ctx, base);
     return;
   }
   if (n <= kComprobaciones || (n & (kPeriodo - 1)) == 0) [[unlikely]] {
@@ -851,7 +851,7 @@ void DrawAScenery(PPCContext& ctx, uint8_t* base) {
     return;
   }
   Sumar(g_originales[s.motivo], uint64_t(1));
-  __imp__sub_824C2850(ctx, base);
+  __imp__sub_824C2878(ctx, base);
 }
 
 }  // namespace nfsmw::escenario_nativo

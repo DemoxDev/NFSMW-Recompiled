@@ -3,12 +3,12 @@
 // On the Switch the XDK's recompiled WMV3 decoder runs at ~98 % of a core and produces ~22 frames per
 // second: cutscenes drop from ~60 to ~20 FPS and the audio ends before the picture. The game's decoder
 // interface (recompiled code):
-//  - sub_8272FD30 prepares a movie's context; [ctx+3300] points to {application data, function}.
-//  - sub_827312C0 (DecodeData, from sub_82734040) requests the compressed frame in chunks through
-//    sub_82749C10, which jumps to that function with r4 = offset, r5 = &pointer to the data, r6 = bytes
+//  - sub_8272FD80 prepares a movie's context; [ctx+3300] points to {application data, function}.
+//  - sub_82731310 (DecodeData, from sub_82734090) requests the compressed frame in chunks through
+//    sub_82749C60, which jumps to that function with r4 = offset, r5 = &pointer to the data, r6 = bytes
 //    requested, r7 = &bytes returned and r8 = &data remaining. It reads the picture header, swaps the
 //    buffers and decodes according to the type ([ctx+280]): I with [ctx+15708] = sub_828C35D8, P with
-//    [ctx+15712] = sub_8278A518 and B with [ctx+3016] = sub_828C58C8. Those, with what they call, take
+//    [ctx+15712] = sub_8278A568 and B with [ctx+3016] = sub_828C58C8. Those, with what they call, take
 //    almost all of the video thread's time.
 //  - The new picture goes into planes [ctx+3672] (Y), [ctx+3676] (U) and [ctx+3680] (V), with the
 //    origin at +[ctx+216] and +[ctx+220] (32- and 16-pixel borders: strides of 1344 and 672 for
@@ -23,7 +23,7 @@
 //    up to 330 ms per frame even on the PC; FFmpeg decodes them correctly.
 //
 // Cvars:
-//  - nfsmw_video_wmv3_nativo: sub_828C35D8, sub_8278A518 and sub_828C58C8 do not decode. FFmpeg decodes
+//  - nfsmw_video_wmv3_nativo: sub_828C35D8, sub_8278A568 and sub_828C58C8 do not decode. FFmpeg decodes
 //    the same bytes the game requested, without reordering (each frame comes out of its own call), and its
 //    planes are copied into the game's buffers. If a frame cannot be replaced: in the game's videos the game
 //    decodes it, and the next native one waits for an I frame; in the others the last good picture (or
@@ -31,7 +31,7 @@
 //  - nfsmw_video_wmv3_sombra (diagnostic): the game decodes and its planes are compared with FFmpeg's;
 //    the luma of frame 30 of each movie is saved as PGM in the working folder.
 //  - nfsmw_video_wmv3_datos_diag (diagnostic): logs the calls to the data function, the arguments of
-//    sub_8272FD30 and the context fields of each movie.
+//    sub_8272FD80 and the context fields of each movie.
 // FFmpeg needs the size and the 4 sequence bytes: they come from the ASF header of the last movie the
 // game read (xboxkrnl_io.cpp in the SDK).
 
@@ -77,12 +77,12 @@ REXCVAR_DEFINE_BOOL(nfsmw_video_wmv3_b_diag, false, "NFSMW",
                     "Diagnostico: en los primeros fotogramas de cada pelicula anota el tipo, los planos que cambia "
                     "cada descodificacion (I, P y B) y los campos del contexto que escribe");
 
-REX_EXTERN(__imp__sub_82749C10);
-REX_EXTERN(__imp__sub_827312C0);
-REX_EXTERN(__imp__sub_8278A518);
+REX_EXTERN(__imp__sub_82749C60);
+REX_EXTERN(__imp__sub_82731310);
+REX_EXTERN(__imp__sub_8278A568);
 REX_EXTERN(__imp__sub_828C35D8);
 REX_EXTERN(__imp__sub_828C58C8);
-REX_EXTERN(__imp__sub_8272FD30);
+REX_EXTERN(__imp__sub_8272FD80);
 
 namespace nfsmw::video_nativo {
 
@@ -102,7 +102,7 @@ using video_wmv3::InfoWmv;
 
 constexpr size_t kMaxFotograma = 8 * 1024 * 1024;
 constexpr uint32_t kDescodificarI = 0x828C35D8;
-constexpr uint32_t kDescodificarP = 0x8278A518;
+constexpr uint32_t kDescodificarP = 0x8278A568;
 constexpr uint32_t kDescodificarB = 0x828C58C8;  // [ctx+3016], in the B branch of DecodeData
 // Type of frame that goes through the hooks
 enum Tipo : int { kI = 0, kP = 1, kB = 2 };
@@ -135,7 +135,7 @@ bool Activo() {
 
 struct Captura {
   uint32_t ctx = 0;
-  uint32_t estructura = 0;  // r3 of sub_82749C10: {application data, function}
+  uint32_t estructura = 0;  // r3 of sub_82749C60: {application data, function}
   uint32_t secciones = 0;
   bool quedan = false;      // the last section says frame bytes remain
   bool error = false;
@@ -143,7 +143,7 @@ struct Captura {
 };
 Captura g_captura;
 std::mutex g_captura_m;
-thread_local Captura* t_captura = nullptr;  // non-null inside sub_827312C0 on this thread
+thread_local Captura* t_captura = nullptr;  // non-null inside sub_82731310 on this thread
 std::atomic<uint32_t> g_datos_anotados{0};
 
 void AnotarSeccion(const uint8_t* base, uint32_t lr, uint32_t estructura, uint32_t desplazamiento, uint32_t pedidos,
@@ -170,11 +170,11 @@ void AnotarSeccion(const uint8_t* base, uint32_t lr, uint32_t estructura, uint32
   }
 }
 
-// Asks the game's data function for the rest of the frame, like the game's bit reader (sub_82734DC8,
+// Asks the game's data function for the rest of the frame, like the game's bit reader (sub_82734E18,
 // object [ctx+76]): structure [lector+44], offset 0, 4 bytes requested and "remaining" in [lector+24].
-//  - With a non-zero offset the application function (sub_827204A0) takes another path: the game
+//  - With a non-zero offset the application function (sub_827204F0) takes another path: the game
 //    crashed.
-//  - "remaining" must end up in [lector+24]: at the end of DecodeData, sub_8272E128 keeps requesting
+//  - "remaining" must end up in [lector+24]: at the end of DecodeData, sub_8272E178 keeps requesting
 //    chunks while it is 1. With "remaining" in another variable the next frame was swallowed
 //    (eahd_bumper frame 81 of 120) and at the end of the movie it kept waiting for data.
 void CompletarFotograma(PPCContext& ctx, uint8_t* base, uint32_t obj) {
@@ -196,7 +196,7 @@ void CompletarFotograma(PPCContext& ctx, uint8_t* base, uint32_t obj) {
     ctx.r6.u64 = 4;
     ctx.r7.u64 = sp + 80;
     ctx.r8.u64 = lector + 24;
-    __imp__sub_82749C10(ctx, base);
+    __imp__sub_82749C60(ctx, base);
     AnotarSeccion(base, 0, estructura, 0, 4, sp + 88, sp + 80, lector + 24, ctx.r3.u32);
     if (c.datos.size() == antes) {
       break;
@@ -429,7 +429,7 @@ Pelicula& PeliculaDe(const uint8_t* base, uint32_t obj) {
   p.ruta = rex::kernel::xboxkrnl::NfsmwUltimoWmvLeido();
   InfoWmv info;
   const bool info_ok = !p.ruta.empty() && video_wmv3::LeerInfoWmv(p.ruta, info);
-  // [ctx+3844] is the loop filter of the sequence (LOOPFILTER): with 1, sub_828C35D8, sub_8278A518 and
+  // [ctx+3844] is the loop filter of the sequence (LOOPFILTER): with 1, sub_828C35D8, sub_8278A568 and
   // sub_828C58C8 also run a filter over the picture, which FFmpeg's WMV3 decoder applies too. B frames: the 3
   // MAXBFRAMES bits of the sequence (STRUCT_C), which the game decodes with [ctx+3016].
   const uint32_t filtro = Leer32(base, obj + 3844);
@@ -459,7 +459,7 @@ Pelicula& PeliculaDe(const uint8_t* base, uint32_t obj) {
   return p;
 }
 
-// The context as the game's functions leave it when they finish: sub_828C35D8 (I), sub_8278A518 (P) and
+// The context as the game's functions leave it when they finish: sub_828C35D8 (I), sub_8278A568 (P) and
 // sub_828C58C8 (B). The B branch of DecodeData then sets [ctx+15512] and [ctx+15488] to its own value.
 void DejarContexto(uint8_t* base, uint32_t obj, int tipo) {
   if (tipo == kP) {
@@ -670,7 +670,7 @@ void LlamarAlJuego(PPCContext& ctx, uint8_t* base, int tipo) {
   if (tipo == kI) {
     __imp__sub_828C35D8(ctx, base);
   } else if (tipo == kP) {
-    __imp__sub_8278A518(ctx, base);
+    __imp__sub_8278A568(ctx, base);
   } else {
     __imp__sub_828C58C8(ctx, base);
   }
@@ -727,10 +727,10 @@ void Descodificar(PPCContext& ctx, uint8_t* base, int tipo) {
 }  // namespace nfsmw::video_nativo
 
 // Decoder data function (jumps to [[r3+4]] with r3 = [r3]).
-REX_HOOK_RAW(sub_82749C10) {
+REX_HOOK_RAW(sub_82749C60) {
   using namespace nfsmw::video_nativo;
   if (!t_captura || ctx.r3.u32 != Leer32(base, t_captura->ctx + 3300)) {
-    __imp__sub_82749C10(ctx, base);
+    __imp__sub_82749C60(ctx, base);
     return;
   }
   const uint32_t lr = static_cast<uint32_t>(ctx.lr);
@@ -740,20 +740,20 @@ REX_HOOK_RAW(sub_82749C10) {
   const uint32_t pedidos = ctx.r6.u32;
   const uint32_t p_bytes = ctx.r7.u32;
   const uint32_t p_quedan = ctx.r8.u32;
-  __imp__sub_82749C10(ctx, base);
+  __imp__sub_82749C60(ctx, base);
   AnotarSeccion(base, lr, estructura, desplazamiento, pedidos, p_datos, p_bytes, p_quedan, ctx.r3.u32);
 }
 
 // DecodeData: collects the chunks of the compressed frame it requests.
-REX_HOOK_RAW(sub_827312C0) {
+REX_HOOK_RAW(sub_82731310) {
   using namespace nfsmw::video_nativo;
   if (!Activo() || t_captura) {
-    __imp__sub_827312C0(ctx, base);
+    __imp__sub_82731310(ctx, base);
     return;
   }
   std::unique_lock<std::mutex> lock(g_captura_m, std::try_to_lock);
   if (!lock.owns_lock()) {
-    __imp__sub_827312C0(ctx, base);
+    __imp__sub_82731310(ctx, base);
     return;
   }
   g_captura.ctx = ctx.r3.u32;
@@ -763,7 +763,7 @@ REX_HOOK_RAW(sub_827312C0) {
   g_captura.error = false;
   g_captura.datos.clear();
   t_captura = &g_captura;
-  __imp__sub_827312C0(ctx, base);
+  __imp__sub_82731310(ctx, base);
   t_captura = nullptr;
 }
 
@@ -773,7 +773,7 @@ REX_HOOK_RAW(sub_828C35D8) {
 }
 
 // Decoding of a P frame ([ctx+15712]).
-REX_HOOK_RAW(sub_8278A518) {
+REX_HOOK_RAW(sub_8278A568) {
   nfsmw::video_nativo::Descodificar(ctx, base, nfsmw::video_nativo::kP);
 }
 
@@ -783,7 +783,7 @@ REX_HOOK_RAW(sub_828C58C8) {
 }
 
 // Preparation of a movie's context: if the context is reused, FFmpeg starts from scratch.
-REX_HOOK_RAW(sub_8272FD30) {
+REX_HOOK_RAW(sub_8272FD80) {
   using namespace nfsmw::video_nativo;
   if (Activo()) {
     std::lock_guard<std::mutex> lock(g_peli_m);
@@ -792,11 +792,11 @@ REX_HOOK_RAW(sub_8272FD30) {
       g_peli.reset();
     }
     if (REXCVAR_GET(nfsmw_video_wmv3_datos_diag)) {
-      REXLOG_INFO("[video] sub_8272FD30: ctx={:08X} r4={:08X} r5={:08X} r6={:08X} r7={:08X} r8={:08X} r9={:08X} "
+      REXLOG_INFO("[video] sub_8272FD80: ctx={:08X} r4={:08X} r5={:08X} r6={:08X} r7={:08X} r8={:08X} r9={:08X} "
                   "r10={:08X} f1={} f2={} lr={:08X}",
                   ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32, ctx.r7.u32, ctx.r8.u32, ctx.r9.u32, ctx.r10.u32,
                   ctx.f1.f64, ctx.f2.f64, static_cast<uint32_t>(ctx.lr));
     }
   }
-  __imp__sub_8272FD30(ctx, base);
+  __imp__sub_8272FD80(ctx, base);
 }

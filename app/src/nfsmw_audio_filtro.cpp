@@ -1,4 +1,4 @@
-// nfsmw - recursive filter of the sound engine in native code (sub_825CD088)
+// nfsmw - recursive filter of the sound engine in native code (sub_825CD0D0)
 //
 // After the resamplers, it is the heaviest leaf function of the audio server thread on PC: 7.9 % of its
 // CPU, 7.4 us per call, about 4 calls per packet. It is a two-stage filter over a delay line of the
@@ -7,7 +7,7 @@
 //   t = x[j] - buf[r5 + j] * a
 //   y = t - buf[r6 + j] * b                buf[pos + j] = y
 //   z = buf[r7 + j] * c + buf[r6 + j]       (read after storing y)
-//   salida[j] = z * g        if r10 == 1   (g = the float at 0x820AFD68)
+//   salida[j] = z * g        if r10 == 1   (g = the float at 0x820AFD78)
 //   salida[j] += z * g       otherwise
 // Returns r3 = 1.
 //
@@ -39,17 +39,17 @@
 // Native by default. On PC, in the alley test run, it gave 0 differences against the recompiled code
 // over 29 million samples and runs 1.6 times faster.
 REXCVAR_DEFINE_INT32(nfsmw_audio_filtro_nativo, 1, "NFSMW",
-                     "Filtro recursivo del motor de sonido (sub_825CD088): 0 = codigo recompilado, 1 = nativo (mismo "
+                     "Filtro recursivo del motor de sonido (sub_825CD0D0): 0 = codigo recompilado, 1 = nativo (mismo "
                      "resultado bit a bit; por defecto), 2 = validar el nativo contra el recompilado");
 
-REX_EXTERN(__imp__sub_825CD088);
+REX_EXTERN(__imp__sub_825CD0D0);
 
 namespace nfsmw::audio_filtro {
 namespace {
 
 using namespace nfsmw::audio_nativo;
 
-constexpr uint32_t kDirGanancia = 0x820AFD68;  // lis r11,-32245; lfs f0,-664(r11)
+constexpr uint32_t kDirGanancia = 0x820AFD78;  // lis r11,-32245; lfs f0,-664(r11)
 constexpr uint32_t kCampos = 4;                 // bytes +4 to +27 of the object are read
 constexpr uint32_t kTamCampos = 24;
 
@@ -157,7 +157,7 @@ void Informar() {
   if (ahora - ultimo < 10000 || !g_ultimo_informe_ms.compare_exchange_strong(ultimo, ahora, std::memory_order_relaxed)) {
     return;
   }
-  NFSMW_INFORME_DIFERIDO("[audio] filtro nativo (modo {}): sub_825CD088 {} llamadas y {} muestras, {} releyendo el objeto, "
+  NFSMW_INFORME_DIFERIDO("[audio] filtro nativo (modo {}): sub_825CD0D0 {} llamadas y {} muestras, {} releyendo el objeto, "
               "diferencias con el recompilado {}",
               REXCVAR_GET(nfsmw_audio_filtro_nativo), g_llamadas.exchange(0), g_muestras.exchange(0),
               g_releidos.exchange(0), g_diferencias.exchange(0));
@@ -183,7 +183,7 @@ void Poner(uint8_t* base, const Rango& r) {
 void Validar(PPCContext& ctx, uint8_t* base) {
   const Argumentos a = LeerArgumentos(ctx);
   if (a.n <= 0) {
-    __imp__sub_825CD088(ctx, base);
+    __imp__sub_825CD0D0(ctx, base);
     return;
   }
   const uint32_t bytes = uint32_t(a.n) * 4;
@@ -198,7 +198,7 @@ void Validar(PPCContext& ctx, uint8_t* base) {
     antes[i].bytes = recompilado[i].bytes = tams[i];
     Guardar(base, antes[i]);
   }
-  __imp__sub_825CD088(ctx, base);
+  __imp__sub_825CD0D0(ctx, base);
   for (size_t i = 0; i < 3; ++i) {
     Guardar(base, recompilado[i]);
   }
@@ -232,10 +232,10 @@ void Validar(PPCContext& ctx, uint8_t* base) {
 
 }  // namespace
 
-void Filtro825CD088(PPCContext& ctx, uint8_t* base) {
+void Filtro825CD0D0(PPCContext& ctx, uint8_t* base) {
   const int32_t modo = REXCVAR_GET(nfsmw_audio_filtro_nativo);
   if (modo != 1 && modo != 2) {
-    __imp__sub_825CD088(ctx, base);
+    __imp__sub_825CD0D0(ctx, base);
     return;
   }
   const int32_t n = ctx.r4.s32;

@@ -2,19 +2,19 @@
 //
 // WHY (PC profile of a race)
 //   With the D3D wait already sleeping (nfsmw_espera_anillo.cpp), the thread that prepares the frames
-//   (XThread F800002C) is still at 101 %: 41 % in yields and 12 % in the game's Sleep (sub_8262F258).
+//   (XThread F800002C) is still at 101 %: 41 % in yields and 12 % in the game's Sleep (sub_8262F2A0).
 //   The game splits each frame between two threads with a flag at 0x82A2CF40:
-//     - That thread, in sub_824411B8, waits in sub_82441F18 for the flag to go back to 0 (the previous
-//       frame has been executed) by calling Sleep(0) (sub_8262D988) in a loop. Then sub_82442058 sets it
-//       to 1 and fills the command list 0x82909650 inside sub_82445660.
-//     - The "Main XThread", in sub_82441CC8, waits with another Sleep(0) loop for the flag to be 1, runs
-//       the commands (sub_823C83F8), sets it to 0 and immediately calls sub_8262DE18 (a game trace).
+//     - That thread, in sub_824411E0, waits in sub_82441F40 for the flag to go back to 0 (the previous
+//       frame has been executed) by calling Sleep(0) (sub_8262D9D0) in a loop. Then sub_82442080 sets it
+//       to 1 and fills the command list 0x82909650 inside sub_82445688.
+//     - The "Main XThread", in sub_82441CF0, waits with another Sleep(0) loop for the flag to be 1, runs
+//       the commands (sub_823C8420), sets it to 0 and immediately calls sub_8262DE60 (a game trace).
 //   On the console both threads run at 44-83 % in a race.
 //
 // WHAT IT DOES
-//   The Sleep(0) calls of those two loops (return addresses 0x82441FB4 and 0x82441D24) sleep until the
+//   The Sleep(0) calls of those two loops (return addresses 0x82441FDC and 0x82441D4C) sleep until the
 //   flag changes, or at most nfsmw_espera_fotograma_max_us, instead of yielding. The change is signaled by
-//   the entry to sub_82445660 (right after setting it to 1) and by the call to sub_8262DE18 (right after
+//   the entry to sub_82445688 (right after setting it to 1) and by the call to sub_8262DE60 (right after
 //   setting it to 0). The game's loop checks the flag again, so an extra notification changes nothing and
 //   a lost one only costs the maximum time. The game's other Sleep calls are not touched.
 //
@@ -82,7 +82,7 @@
  */
 REXCVAR_DEFINE_BOOL(nfsmw_ejecutor_sin_vueltas, true, "NFSMW",
                     "24/09 (build 169): el Main XThread espera las ordenes del preparador DURMIENDO en pausas cortas "
-                    "en vez de dar vueltas sin parar en sub_82441CC8 (12,6 % de un nucleo en la 162). false = como "
+                    "en vez de dar vueltas sin parar en sub_82441CF0 (12,6 % de un nucleo en la 162). false = como "
                     "antes");
 REXCVAR_DEFINE_INT32(nfsmw_ejecutor_pausa_us, 100, "NFSMW",
                      "Pausa del ejecutor mientras espera ordenes (us). Menos = responde antes y gasta mas CPU");
@@ -109,8 +109,8 @@ REXCVAR_DEFINE_INT32(nfsmw_espera_fotograma_max_us, 1000, "NFSMW",
 namespace {
 
 constexpr uint32_t kBandera = 0x82A2CF40;
-constexpr uint32_t kRetornoPreparador = 0x82441FB4;  // Sleep(0) of sub_82441F18: waits for the flag to stop being 1
-constexpr uint32_t kRetornoEjecutor = 0x82441D24;    // Sleep(0) of sub_82441CC8: waits for the flag to stop being 0
+constexpr uint32_t kRetornoPreparador = 0x82441FDC;  // Sleep(0) of sub_82441F40: waits for the flag to stop being 1
+constexpr uint32_t kRetornoEjecutor = 0x82441D4C;    // Sleep(0) of sub_82441CF0: waits for the flag to stop being 0
 
 std::mutex g_mutex;
 std::condition_variable g_cv;
@@ -132,7 +132,7 @@ std::atomic<uint64_t> g_avisos_ejecutor{0};
 std::atomic<uint64_t> g_ns_max_preparador{0};
 std::atomic<uint64_t> g_ns_max_ejecutor{0};
 std::atomic<int64_t> g_siguiente_informe_ms{0};
-// The executor with no commands (see the sub_823C83F8 hook).
+// The executor with no commands (see the sub_823C8420 hook).
 std::atomic<uint64_t> g_sin_ordenes_esperas{0};
 std::atomic<uint64_t> g_sin_ordenes_pausas{0};
 std::atomic<uint64_t> g_sin_ordenes_ns{0};
@@ -300,10 +300,10 @@ void Informe() {
 
 }  // namespace
 
-// The game's Sleep(ms): li r4,0 and a jump to sub_8262F258. The two handoff loops only check the flag on
+// The game's Sleep(ms): li r4,0 and a jump to sub_8262F2A0. The two handoff loops only check the flag on
 // return.
-REX_EXTERN(__imp__sub_8262D988);
-REX_HOOK_RAW(sub_8262D988) {
+REX_EXTERN(__imp__sub_8262D9D0);
+REX_HOOK_RAW(sub_8262D9D0) {
   static const bool activo = REXCVAR_GET(nfsmw_espera_fotograma_bloqueante);
   if (activo && ctx.r3.u32 == 0) {
     const uint32_t retorno = uint32_t(ctx.lr);
@@ -339,21 +339,21 @@ REX_HOOK_RAW(sub_8262D988) {
       return;
     }
   }
-  __imp__sub_8262D988(ctx, base);
+  __imp__sub_8262D9D0(ctx, base);
 }
 
 /*
- * During stutters the preparer slept almost half of the time in here (sub_826E8EE8 <- sub_8245DE88 <-
- * sub_82285F78 <- sub_823AFF80), in a loop of KeWaitForSingleObject and Sleep on an object with virtual
+ * During stutters the preparer slept almost half of the time in here (sub_826E8F38 <- sub_8245DEB0 <-
+ * sub_82285F88 <- sub_823AFFA8), in a loop of KeWaitForSingleObject and Sleep on an object with virtual
  * calls (states 1 and 7). Measurement only: how long it lasts, the object's vtable and the caller, for
  * the "[tiron]" line. It changes nothing of what it does.
  */
-REX_EXTERN(__imp__sub_826E8EE8);
-REX_HOOK_RAW(sub_826E8EE8) {
+REX_EXTERN(__imp__sub_826E8F38);
+REX_HOOK_RAW(sub_826E8F38) {
   const uint32_t objeto = ctx.r3.u32;
   const uint32_t llamante = uint32_t(ctx.lr);
   const auto antes = std::chrono::steady_clock::now();
-  __imp__sub_826E8EE8(ctx, base);
+  __imp__sub_826E8F38(ctx, base);
   const uint64_t ns = uint64_t(
       std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - antes).count());
   nfsmw::esperas::Sumar(nfsmw::esperas::kJuegoMedio, ns);
@@ -366,27 +366,27 @@ REX_HOOK_RAW(sub_826E8EE8) {
 /*
  * The executor spun without sleeping while waiting for commands.
  *
- * Stack sampling in a race: the Main XThread spent 12.6 % of a core in the code of sub_82441CC8 itself (with LTO
- * it has sub_823C83F8 inlined). It is this loop (loc_82441D6C):
+ * Stack sampling in a race: the Main XThread spent 12.6 % of a core in the code of sub_82441CF0 itself (with LTO
+ * it has sub_823C8420 inlined). It is this loop (loc_82441D94):
  *
  *     done = list[+12] == 0 || (list[+8] != 0 && list[+0] == list[+4]);
- *     while (!done) { sub_823C83F8(list, list[+0] - list[+4]); ...recompute done... }
+ *     while (!done) { sub_823C8420(list, list[+0] - list[+4]); ...recompute done... }
  *
  * list = 0x82909650: +0 commands written by the preparer, +4 commands executed, +8 "the preparer has closed
  * the list", +12 list open. While the preparer is still writing (+8 == 0) and there are no new commands
- * (+0 == +4), sub_823C83F8 is called with 0 commands, returns at once, and is called again, without sleeping.
+ * (+0 == +4), sub_823C8420 is called with 0 commands, returns at once, and is called again, without sleeping.
  * On the Xbox 360 that was a hardware thread; here it is one core out of 3, and the executor runs at 0x3A,
  * where Horizon does not time-slice: it does not give the core up to the game threads (0x3B) until it moves
  * elsewhere.
  *
- * Here, only in that call (return address 0x82441DC4) and only with 0 commands: it sleeps in short pauses
+ * Here, only in that call (return address 0x82441DEC) and only with 0 commands: it sleeps in short pauses
  * while the list is still open, not closed and without new commands, for at most
  * nfsmw_ejecutor_espera_max_us. Then the original is called as before (with 0 commands it does nothing), and
  * the game's loop checks the conditions again.
  */
-constexpr uint32_t kRetornoOrdenes = 0x82441DC4;
-REX_EXTERN(__imp__sub_823C83F8);
-REX_HOOK_RAW(sub_823C83F8) {
+constexpr uint32_t kRetornoOrdenes = 0x82441DEC;
+REX_EXTERN(__imp__sub_823C8420);
+REX_HOOK_RAW(sub_823C8420) {
   static const bool activo = REXCVAR_GET(nfsmw_ejecutor_sin_vueltas);
   if (activo && uint32_t(ctx.lr) == kRetornoOrdenes && ctx.r4.u32 == 0) {
     const uint32_t lista = ctx.r3.u32;
@@ -412,28 +412,28 @@ REX_HOOK_RAW(sub_823C83F8) {
       nfsmw::esperas::Sumar(nfsmw::esperas::kEjecutorSinOrdenes, ns_sin_ordenes);
     }
   }
-  __imp__sub_823C83F8(ctx, base);
+  __imp__sub_823C8420(ctx, base);
 }
 
-// Right after the flag is set to 1 (sub_82442058).
+// Right after the flag is set to 1 (sub_82442080).
 // Also how long the preparer takes to fill the list (the whole call) and the time spent outside it between two
 // fills (its simulation plus its handoff wait), for the "[tiron] juego" line. Once per frame.
-REX_EXTERN(__imp__sub_82445660);
-REX_HOOK_RAW(sub_82445660) {
+REX_EXTERN(__imp__sub_82445688);
+REX_HOOK_RAW(sub_82445688) {
   Avisar();
   static int64_t fin_anterior_ns = 0;  // only called by the thread that prepares the frames
   const int64_t inicio_ns = AhoraNs();
   if (fin_anterior_ns != 0) {
     nfsmw::esperas::Sumar(nfsmw::esperas::kPreparadorFuera, uint64_t(inicio_ns - fin_anterior_ns));
   }
-  __imp__sub_82445660(ctx, base);
+  __imp__sub_82445688(ctx, base);
   fin_anterior_ns = AhoraNs();
   nfsmw::esperas::Sumar(nfsmw::esperas::kPreparadorLista, uint64_t(fin_anterior_ns - inicio_ns));
 }
 
-// Right after it is set to 0 (sub_82441CC8); sub_82441F18 also calls it, and an extra notification does not matter.
-REX_EXTERN(__imp__sub_8262DE18);
-REX_HOOK_RAW(sub_8262DE18) {
+// Right after it is set to 0 (sub_82441CF0); sub_82441F40 also calls it, and an extra notification does not matter.
+REX_EXTERN(__imp__sub_8262DE60);
+REX_HOOK_RAW(sub_8262DE60) {
   Avisar();
-  __imp__sub_8262DE18(ctx, base);
+  __imp__sub_8262DE60(ctx, base);
 }

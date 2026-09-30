@@ -24,20 +24,20 @@
 //  draws -95 ms, transfers -50 ms, resolves -50 ms per frame.
 //
 //  How the game chooses (recompiled code)
-//    sub_82458310  renderer constructor: table of 6 AA modes at
+//    sub_82458338  renderer constructor: table of 6 AA modes at
 //                  object+4 (tiles), +28 (width), +52 (height), +76 (MSAA)
 //                  and +100+64*mode (tile rectangles).
 //                    mode 2: 1 tile  1280x736  1x   <- no antialiasing
 //                    mode 3: 2 tiles  640x736  2x
 //                    mode 4: 3 tiles 1280x256  4x   <- the one used at 720p
 //                    mode 5: 4 tiles  320x736  4x
-//    sub_824402F0  XGetVideoMode: in HD with width >= 1280 it sets mode 4.
-//    sub_82441990  switches live between modes 2, 3 and 4. So the retail
+//    sub_82440318  XGetVideoMode: in HD with width >= 1280 it sets mode 4.
+//    sub_824419B8  switches live between modes 2, 3 and 4. So the retail
 //                  game already renders in mode 2 when it lowers quality:
 //                  it is not an invented state.
-//    sub_82458850  registers one set of render targets per mode.
-//    sub_8245D320  copies the descriptor (128 bytes) to the table 0x82A4527C.
-//    sub_8245D5F8  binds a set; if byte +41 is 1 -> BeginTiling with Count
+//    sub_82458878  registers one set of render targets per mode.
+//    sub_8245D348  copies the descriptor (128 bytes) to the table 0x82A4527C.
+//    sub_8245D620  binds a set; if byte +41 is 1 -> BeginTiling with Count
 //                  at +124 and the rectangles at +44.
 //
 //  What we change
@@ -46,7 +46,7 @@
 //     mode selector is untouched: whichever it picks, the scene is drawn
 //     once. Everything else that depends on the mode stays as in retail.
 //  2. Any set registered with MSAA is changed to 1 sample. This covers the
-//     256x256 reflection with 4x (sub_8243C1C8) and the SD modes.
+//     256x256 reflection with 4x (sub_8243C1F0) and the SD modes.
 //
 //  MarathonRecomp-NX does the same in its renderer: SurfaceSize returns 0
 //  (no tiling) and on Switch it leaves MSAA off. Antialiasing is lost.
@@ -80,7 +80,7 @@ REXCVAR_DEFINE_BOOL(nfsmw_render_sin_mosaico, REX_PLATFORM_SWITCH != 0, "NFSMW",
                     "(evita repetir la escena por tira bajo la emulacion de Xenos)")
     .lifecycle(rex::cvar::Lifecycle::kRequiresRestart);
 // With the mode 4 table made equal to mode 2's, the game stayed in mode 4 with a one-tile scene. With
-// this it really uses its mode 2, the game's own mode without antialiasing (sub_82441990 picks it when
+// this it really uses its mode 2, the game's own mode without antialiasing (sub_824419B8 picks it when
 // lowering quality). It was done on the theory that this mismatch caused the blue edges against the sky,
 // but no: they look the same in both modes and in the emulated renderer; they come from the game's bright
 // pass (see nfsmw_resplandor_cielo).
@@ -100,7 +100,7 @@ REXCVAR_DEFINE_BOOL(nfsmw_render_prueba_mantener_msaa, false, "NFSMW",
 // The internal resolution comes from nfsmw_resolucion_interna (Graficos category), and with
 // "automatico" it follows the dock live: 1920x1080 docked and 1280x720 handheld.
 //
-// How it works without a restart: the game already switches AA mode on the fly (sub_82441990 jumps
+// How it works without a restart: the game already switches AA mode on the fly (sub_824419B8 jumps
 // between 2, 3 and 4 when lowering quality) and each mode has its own set of render targets, registered
 // at startup. So mode 2 keeps its usual 1280x736 and mode 4 gets a 1920x1088 with a visible area of
 // 1920x1080; then it only takes writing 2 or 4 into the mode index the game reads. It is the same path
@@ -131,7 +131,7 @@ constexpr uint32_t kAncho1080p = 1920;
 constexpr uint32_t kAlto1080p = 1088;   // 1080 rounded up to a multiple of 32, like its own 720 -> 736
 constexpr uint32_t kVisible1080p = 1080;
 
-// The four video size globals that sub_82441990 hard-codes to 1280/720, next to the output mode variable
+// The four video size globals that sub_824419B8 hard-codes to 1280/720, next to the output mode variable
 // (0x82A2CF80). The game's front buffer size is taken from them (see below).
 constexpr uint32_t kGlobalAncho0 = 0x82A2CF68;
 constexpr uint32_t kGlobalAlto0 = 0x82A2CF6C;
@@ -143,7 +143,7 @@ constexpr uint32_t kModoSalida1080p = 3;  // su tabla: 0 -> 640x480, 2 -> 1280x7
 // Puntero global al renderizador (lis r11,-32093 / lwz -11860).
 constexpr uint32_t kRenderizadorGlobal = 0x82A2D1AC;
 
-// Set descriptor that sub_8245D320 receives in r5.
+// Set descriptor that sub_8245D348 receives in r5.
 constexpr uint32_t kDescAncho = 8;
 constexpr uint32_t kDescAlto = 12;
 constexpr uint32_t kDescMsaa = 36;
@@ -223,7 +223,7 @@ void IgualarModosAlModoSinAa(uint8_t* base, uint32_t obj) {
     if (!REXCVAR_GET(nfsmw_render_prueba_mantener_msaa)) {
       Escribir32(base, obj + kOffMsaa + 4 * m, 0);
     }
-    // Only the first tile is read (sub_82458850 copies tiles*16 bytes).
+    // Only the first tile is read (sub_82458878 copies tiles*16 bytes).
     std::memcpy(base + obj + kOffRects + kBytesPorModoRects * m, base + rect2, 16);
   }
 
@@ -258,7 +258,7 @@ bool ModoSinAaActivo() {
   return REXCVAR_GET(nfsmw_render_sin_mosaico) && REXCVAR_GET(nfsmw_render_modo_sin_aa);
 }
 
-// After each mode choice by the game (sub_824402F0 and sub_82441990): if it chose 3, 4 or 5, it stays at
+// After each mode choice by the game (sub_82440318 and sub_824419B8): if it chose 3, 4 or 5, it stays at
 // 2. It is written after the game has done its part with that choice (its quality calls do not read the
 // index).
 /*
@@ -370,12 +370,12 @@ bool QuiereSalida1080p() { return ModoQueToca() == kModo1080p; }
  *
  * Read in the recompiled code:
  *
- *   sub_824402F0 (the one that calls XGetVideoMode) hard-codes 1280 and 720 into the four globals as soon
+ *   sub_82440318 (the one that calls XGetVideoMode) hard-codes 1280 and 720 into the four globals as soon
  *   as the video mode is HD with width >= 1280:
  *       stw 1280 -> 0x82A2CF70 and 0x82A2CF68      stw 720 -> 0x82A2CF74 and 0x82A2CF6C
- *   and then sub_82440420 builds the D3DPRESENT_PARAMETERS (at 0x828FBB70) reading exactly the first two:
+ *   and then sub_82440448 builds the D3DPRESENT_PARAMETERS (at 0x828FBB70) reading exactly the first two:
  *       lwz 0x82A2CF68 -> [params+0] BackBufferWidth      lwz 0x82A2CF6C -> [params+4] BackBufferHeight
- *   before calling CreateDevice (sub_825A1658).
+ *   before calling CreateDevice (sub_825A16A0).
  *
  * That is why raising the video mode to 1920x1080 did nothing: the game overwrites it with its constant
  * and never looks at what the system says beyond "it is HD". Here we overwrite the game's value.
@@ -507,24 +507,24 @@ REX_HOOK_RAW(sub_82223308) {
 }
 
 // The two functions that choose the AA mode. After the original runs, 3, 4 or 5 becomes 2.
-REX_EXTERN(__imp__sub_824402F0);
-REX_HOOK_RAW(sub_824402F0) {
-  __imp__sub_824402F0(ctx, base);
+REX_EXTERN(__imp__sub_82440318);
+REX_HOOK_RAW(sub_82440318) {
+  __imp__sub_82440318(ctx, base);
   // This is the one that hard-codes 1280x720 into the four screen size globals.
   nfsmw::render_targets::ImponerTamanoDeSalida(base, "XGetVideoMode");
   nfsmw::render_targets::ForzarModoSinAa(base);
 }
 
-// sub_82440420 builds the D3DPRESENT_PARAMETERS from those globals and creates the device. It is the
+// sub_82440448 builds the D3DPRESENT_PARAMETERS from those globals and creates the device. It is the
 // last chance to change the front buffer size: after that it already exists.
-REX_EXTERN(__imp__sub_82440420);
-REX_HOOK_RAW(sub_82440420) {
+REX_EXTERN(__imp__sub_82440448);
+REX_HOOK_RAW(sub_82440448) {
   nfsmw::render_targets::ImponerTamanoDeSalida(base, "antes de CreateDevice");
-  __imp__sub_82440420(ctx, base);
+  __imp__sub_82440448(ctx, base);
 }
-REX_EXTERN(__imp__sub_82441990);
-REX_HOOK_RAW(sub_82441990) {
-  __imp__sub_82441990(ctx, base);
+REX_EXTERN(__imp__sub_824419B8);
+REX_HOOK_RAW(sub_824419B8) {
+  __imp__sub_824419B8(ctx, base);
   // This is the one that sets up video and hard-codes the size, so it is changed here.
   nfsmw::render_targets::EscribirTamanoVideo(base);
   nfsmw::render_targets::ForzarModoSinAa(base);
@@ -547,23 +547,23 @@ REX_HOOK_RAW(sub_82225610) {
 
 // Registration of the 6 main scene sets, one per AA mode.
 // r3 = renderer. The table is fixed before the original reads it.
-REX_EXTERN(__imp__sub_82458850);
-REX_HOOK_RAW(sub_82458850) {
+REX_EXTERN(__imp__sub_82458878);
+REX_HOOK_RAW(sub_82458878) {
   if (REXCVAR_GET(nfsmw_render_sin_mosaico)) {
     nfsmw::render_targets::IgualarModosAlModoSinAa(base, ctx.r3.u32);
   }
-  __imp__sub_82458850(ctx, base);
+  __imp__sub_82458878(ctx, base);
 }
 
 // The game's output resolution, which its front buffer comes from. The video mode does not decide it
 // (tested: with video_mode 1920x1080 the front buffer stayed at 1280x720); this table of the game's does:
 // it reads a global and returns 640x480, 1280x720 or 1920x1080 through its output pointers. The 1080p
 // mode was already in the 2005 binary; nothing selects it, so it is imposed here.
-REX_EXTERN(__imp__sub_82447F78);
-REX_HOOK_RAW(sub_82447F78) {
+REX_EXTERN(__imp__sub_82447FA0);
+REX_HOOK_RAW(sub_82447FA0) {
   const uint32_t salida_ancho = ctx.r4.u32;
   const uint32_t salida_alto = ctx.r5.u32;
-  __imp__sub_82447F78(ctx, base);
+  __imp__sub_82447FA0(ctx, base);
   if (!nfsmw::render_targets::QuiereSalida1080p() || !salida_ancho || !salida_alto) {
     return;
   }
@@ -572,17 +572,17 @@ REX_HOOK_RAW(sub_82447F78) {
 
 // Binding of a render target set. The game does it every frame, so it is where the resolution is checked
 // for a change because the console has been docked or undocked.
-REX_EXTERN(__imp__sub_8245D5F8);
-REX_HOOK_RAW(sub_8245D5F8) {
+REX_EXTERN(__imp__sub_8245D620);
+REX_HOOK_RAW(sub_8245D620) {
   nfsmw::render_targets::ForzarModoSinAa(base);
-  __imp__sub_8245D5F8(ctx, base);
+  __imp__sub_8245D620(ctx, base);
 }
 
 // Registration of a set of render targets. r5 = the caller's temporary descriptor,
 // which the original copies to the global table. MSAA is removed from it; the
 // caller writes that field again before each registration.
-REX_EXTERN(__imp__sub_8245D320);
-REX_HOOK_RAW(sub_8245D320) {
+REX_EXTERN(__imp__sub_8245D348);
+REX_HOOK_RAW(sub_8245D348) {
   using namespace nfsmw::render_targets;
   const uint32_t desc = ctx.r5.u32;
   if (desc != 0 && REXCVAR_GET(nfsmw_resolucion_interna) == "1920x1080") {
@@ -606,5 +606,5 @@ REX_HOOK_RAW(sub_8245D320) {
                   base[desc + kDescTiling], Leer32(base, desc + kDescTiras), n);
     }
   }
-  __imp__sub_8245D320(ctx, base);
+  __imp__sub_8245D348(ctx, base);
 }

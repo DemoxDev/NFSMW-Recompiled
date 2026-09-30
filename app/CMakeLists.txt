@@ -229,7 +229,7 @@ if(REXGLUE_PLATFORM_SWITCH)
     # that way each .gcda name is relative and the same on the console and on the PC.
     # Profile folder: one per edition under pgo/ at the root of the repository (tools/editions/crear_arbol.py
     # points each edition tree to its own).
-    get_filename_component(NFSMW_PGO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pgo/pal_es" ABSOLUTE)
+    get_filename_component(NFSMW_PGO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../pgo/pal_en" ABSOLUTE)
     set(NFSMW_PGO "" CACHE STRING "Optimizacion por perfil: vacio, generar o usar")
     if(NFSMW_PGO)
         file(TO_NATIVE_PATH "${CMAKE_BINARY_DIR}" NFSMW_PGO_PREFIJO)

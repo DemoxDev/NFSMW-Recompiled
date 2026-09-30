@@ -6,29 +6,29 @@
 //  at ~10,000 per second: every draw cost the same regardless of its pass.
 //
 //  How the game renders a race (recompiled code)
-//    sub_824411B8  per-frame render: calls sub_82441100 and then
-//                  sub_82445660.
-//    sub_82441100  sub_8243FF30 enables views 1-5: byte +8 of each view
+//    sub_824411E0  per-frame render: calls sub_82441128 and then
+//                  sub_82445688.
+//    sub_82441128  sub_8243FF58 enables views 1-5: byte +8 of each view
 //                  in the table 0x82A38070 (112 bytes per view). In single
 //                  player mode views 1 (scene) and 4 (reflection) remain.
-//                  Then sub_824E4A20 -> sub_8243C6E0 enables the 6 faces of
+//                  Then sub_824E4A48 -> sub_8243C708 enables the 6 faces of
 //                  the car cubemap (pointers at 0x82A47E70) according to the
 //                  row (counter 0x82A2CF24 % N of 0x828FB964) of the table
 //                  0x828FBA88. It only prepares the views 1-17 that are active.
-//    sub_82445660  with state 6 (0x82A39AD8) and no video, in this order:
+//    sub_82445688  with state 6 (0x82A39AD8) and no video, in this order:
 //                  1600x1600 shadows, 640x360 road reflection (views
 //                  4 and 5), 256x256 cubemap (views 18-23) and main view.
-//    sub_824442E0  reflection pass: returns without doing anything if
+//    sub_82444308  reflection pass: returns without doing anything if
 //                  byte +8 of view 4 is 0.
-//    sub_82444688  cubemap pass: skips each face whose byte +8 is 0.
+//    sub_824446B0  cubemap pass: skips each face whose byte +8 is 0.
 //
 //  What this file does, only in a race (state 6)
-//  1. After sub_8243FF30, with nfsmw_reflejo_carretera = false, it disables
+//  1. After sub_8243FF58, with nfsmw_reflejo_carretera = false, it disables
 //     views 4 and 5 before they are prepared: they are not prepared, drawn or
 //     resolved. The reflection texture keeps whatever it last held.
 //     Not used on the Switch: the water samples that reflection, and the
 //     sea in the coastal area came out black.
-//  2. After sub_8243C6E0, with nfsmw_cubemap_caras_max = k (0..6), it leaves
+//  2. After sub_8243C708, with nfsmw_cubemap_caras_max = k (0..6), it leaves
 //     at most k faces active per frame and rotates which ones, so all of
 //     them get updated. With -1 it keeps the game's choice. The faces in
 //     nfsmw_cubemap_caras_siempre do not count toward that limit: they are
@@ -426,7 +426,7 @@ std::atomic<bool> g_aviso_estreno_falta{false};
 std::atomic<bool> g_aviso_retrovisor{false};
 std::atomic<int> g_cara_diag{-1};
 // Environment map minimum detail: 0 = nothing written to that face yet.
-// Only touched from the game thread, inside the sub_8243C6E0 hook.
+// Only touched from the game thread, inside the sub_8243C708 hook.
 int32_t g_detalle_aplicado[kCaras] = {0, 0, 0, 0, 0, 0};
 /*
  * The value the game really puts in each face, learned the first time it is seen. An earlier version
@@ -440,7 +440,7 @@ int g_layout_vista = 0;  // 0 = unchecked, 1 = matches, -1 = mismatch (never wri
 std::atomic<bool> g_aviso_detalle{false};
 
 // In how many race frames the mirror face (view 20) is updated, logged every 10 s. Counted after
-// sub_8243FF30, which only enables views 1-5: the table keeps the previous frame's final activation, with
+// sub_8243FF58, which only enables views 1-5: the table keeps the previous frame's final activation, with
 // the face limit already applied. Only from the game's main thread. The face being active does not
 // guarantee the mirror changes (with the wrong face pinned this read 100 %): the real rate is measured
 // on the image.
@@ -678,7 +678,7 @@ void DiagnosticoCarasDelCubo(const uint8_t* base, uint32_t tabla) {
   g_aviso_caras_nombradas.store(true, std::memory_order_relaxed);
 }
 
-// nfsmw_reflejo_bajo_demanda. Only from the game's main thread (sub_8243FF30 hook).
+// nfsmw_reflejo_bajo_demanda. Only from the game's main thread (sub_8243FF58 hook).
 constexpr uint32_t kReflejoGracia = 20;    // renderer frames without a read before spacing it out
 constexpr uint32_t kReflejoMirando = 90;   // frames always drawing it, to check the address
 enum class FaseReflejo { kMirando, kAplicando, kApagado };
@@ -861,9 +861,9 @@ void DecidirReflejo(uint8_t* base) {
 }  // namespace
 }  // namespace nfsmw::recortes_carrera
 
-REX_EXTERN(__imp__sub_8243FF30);
-REX_HOOK_RAW(sub_8243FF30) {
-  __imp__sub_8243FF30(ctx, base);
+REX_EXTERN(__imp__sub_8243FF58);
+REX_HOOK_RAW(sub_8243FF58) {
+  __imp__sub_8243FF58(ctx, base);
   using namespace nfsmw::recortes_carrera;
   ContarRetrovisor(base);
   if (!EnCarrera(base)) {
@@ -910,10 +910,10 @@ REX_HOOK_RAW(sub_82216600) {
   }
 }
 
-REX_EXTERN(__imp__sub_8243C6E0);
-REX_HOOK_RAW(sub_8243C6E0) {
+REX_EXTERN(__imp__sub_8243C708);
+REX_HOOK_RAW(sub_8243C708) {
   const uint32_t tabla = ctx.r3.u32;
-  __imp__sub_8243C6E0(ctx, base);
+  __imp__sub_8243C708(ctx, base);
   using namespace nfsmw::recortes_carrera;
   RegistrarTablaCaras(base);
   if (!EnCarrera(base)) {

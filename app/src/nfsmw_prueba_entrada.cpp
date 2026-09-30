@@ -35,8 +35,8 @@ REXCVAR_DEFINE_STRING(nfsmw_prueba_botones, "", "NFSMW",
 
 // Race tests: the car has to move forward following the track without leaving it. The button script only
 // holds the trigger, and the car ended up against a wall. The game has a script command "ForceAIControl"
-// (registered with sub_8237B858 at 0x8235ED28; handler sub_82367128): with r3 = 0 it takes player 1 from the
-// list 0x82C74BA0 (sub_82366FB0), looks up its AI interface (sub_8231AF38) and, unless it is already active,
+// (registered with sub_8237B868 at 0x8235ED38; handler sub_82367138): with r3 = 0 it takes player 1 from the
+// list 0x82C74BA0 (sub_82366FC0), looks up its AI interface (sub_8231AF48) and, unless it is already active,
 // enables AI control (virtual function +16 with 1). It is what the game does when crossing the finish line:
 // the AI drives the player's car along the racing line.
 REXCVAR_DEFINE_BOOL(nfsmw_prueba_ia_conduce, false, "NFSMW",
@@ -51,7 +51,7 @@ REXCVAR_DEFINE_DOUBLE(nfsmw_prueba_ia_conduce_retraso_s, 12.0, "NFSMW",
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 // Alley shortcut in Ironwood Estates: the robotic-audio tests have to go through it, and the game's AI does
-// not take it. The command registered right before ForceAIControl (handler sub_823671C0) does the opposite:
+// not take it. The command registered right before ForceAIControl (handler sub_823671D0) does the opposite:
 // with r3 = 0 it takes player 1, looks up its AI interface and, if the AI is driving, calls virtual function
 // +16 with 0 and gives the car back to the player.
 REXCVAR_DEFINE_DOUBLE(nfsmw_prueba_ia_suelta_s, 0.0, "NFSMW",
@@ -109,10 +109,10 @@ REXCVAR_DEFINE_DOUBLE(nfsmw_prueba_piloto_zona_muerta, 0.24, "NFSMW",
                       "piloto empiezan ahi (0,24 es la zona muerta habitual de XInput)")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REX_EXTERN(__imp__sub_824411B8);
-REX_EXTERN(__imp__sub_82366FB0);
-REX_EXTERN(__imp__sub_82367128);
-REX_EXTERN(__imp__sub_823671C0);
+REX_EXTERN(__imp__sub_824411E0);
+REX_EXTERN(__imp__sub_82366FC0);
+REX_EXTERN(__imp__sub_82367138);
+REX_EXTERN(__imp__sub_823671D0);
 
 namespace nfsmw::prueba {
 namespace {
@@ -432,12 +432,12 @@ bool Legible(uint8_t* base, uint32_t direccion, uint32_t tamano) {
 }
 
 // Dumps to logs/coche_N.bin the memory of player 1's car interfaces and of what they point to.
-// sub_82366FB0(0) returns the player's car interface; at +4 is its COM object, with the sorted list of
-// {identifier, interface} pairs between +4 and +8 (walked by sub_8231AF38). Format: "NFSCOCHE", u32
+// sub_82366FC0(0) returns the player's car interface; at +4 is its COM object, with the sorted list of
+// {identifier, interface} pairs between +4 and +8 (walked by sub_8231AF48). Format: "NFSCOCHE", u32
 // version (1), f64 race seconds and blocks {u32 address, u32 size, u32 source (where the pointer was;
 // 0 = direct), guest bytes}; the headers in little endian.
 void VolcarCoche(PPCContext& ctx, uint8_t* base, double segundos) {
-  const uint32_t interfaz = ComandoJugador1(ctx, base, __imp__sub_82366FB0);
+  const uint32_t interfaz = ComandoJugador1(ctx, base, __imp__sub_82366FC0);
   const uint32_t objeto = Legible(base, interfaz, 8) ? Leer32(base, interfaz + 4) : 0;
   if (!Legible(base, objeto, 16)) {
     REXLOG_WARN("[prueba] coche del jugador a los {:.2f} s: sin objeto (interfaz {:08X}, objeto {:08X})", segundos,
@@ -562,7 +562,7 @@ double LeerF32(const uint8_t* base, uint32_t direccion) {
 
 bool LeerCoche(PPCContext& ctx, uint8_t* base, EstadoCoche& e) {
   if (g_interfaz_coche == 0) {
-    const uint32_t interfaz = ComandoJugador1(ctx, base, __imp__sub_82366FB0);
+    const uint32_t interfaz = ComandoJugador1(ctx, base, __imp__sub_82366FC0);
     if (!Legible(base, interfaz, 0x900)) {
       return false;
     }
@@ -704,7 +704,7 @@ bool Pilotar(PPCContext& ctx, uint8_t* base, double segundos, const EstadoCoche&
     if (!g_ia_activada || g_ia_soltada || distancia_a > REXCVAR_GET(nfsmw_prueba_piloto_radio)) {
       return false;
     }
-    ComandoJugador1(ctx, base, __imp__sub_823671C0);
+    ComandoJugador1(ctx, base, __imp__sub_823671D0);
     g_piloto = Piloto::kConduciendo;
     g_piloto_inicio = Reloj::now();
     g_piloto_informe = 0.0;
@@ -737,7 +737,7 @@ bool Pilotar(PPCContext& ctx, uint8_t* base, double segundos, const EstadoCoche&
   if (recorrido >= total || t >= REXCVAR_GET(nfsmw_prueba_piloto_max_s)) {
     g_stick_lx.store(0, std::memory_order_relaxed);
     g_bits_tras_soltar.store(0, std::memory_order_relaxed);
-    ComandoJugador1(ctx, base, __imp__sub_82367128);
+    ComandoJugador1(ctx, base, __imp__sub_82367138);
     g_piloto = Piloto::kTerminado;
     REXLOG_INFO("[prueba] piloto: la IA vuelve a conducir en ({:.1f}, {:.1f}) tras {:.1f} s, tramo {}, recorrido "
                 "{:.1f} de {:.1f} m, lateral {:+.1f} m, {:.1f} m/s",
@@ -821,7 +821,7 @@ void IaConduce(PPCContext& ctx, uint8_t* base) {
     // Alley shortcut: after nfsmw_prueba_ia_suelta_s seconds of racing the car is taken from the AI.
     const double suelta_s = REXCVAR_GET(nfsmw_prueba_ia_suelta_s);
     if (suelta_s > 0.0 && segundos >= suelta_s) {
-      ComandoJugador1(ctx, base, __imp__sub_823671C0);
+      ComandoJugador1(ctx, base, __imp__sub_823671D0);
       g_ia_soltada = true;
       g_soltada = Reloj::now();
       REXLOG_INFO("[prueba] carrera: la IA suelta el coche del jugador ({:.1f} s despues de entrar en la carrera); "
@@ -834,7 +834,7 @@ void IaConduce(PPCContext& ctx, uint8_t* base) {
   if (segundos < REXCVAR_GET(nfsmw_prueba_ia_conduce_retraso_s)) {
     return;
   }
-  ComandoJugador1(ctx, base, __imp__sub_82367128);
+  ComandoJugador1(ctx, base, __imp__sub_82367138);
   g_ia_activada = true;
   REXLOG_INFO("[prueba] carrera: la IA del juego conduce el coche del jugador (ForceAIControl, {:.1f} s "
               "despues de entrar en la carrera)",
@@ -868,9 +868,9 @@ void EnvolverEntrada(rex::RuntimeConfig& config) {
 }  // namespace nfsmw::prueba
 
 // Render of each game frame (main thread): used as the clock to enable the AI in a race.
-REX_HOOK_RAW(sub_824411B8) {
+REX_HOOK_RAW(sub_824411E0) {
   if (REXCVAR_GET(nfsmw_prueba_ia_conduce)) {
     nfsmw::prueba::IaConduce(ctx, base);
   }
-  __imp__sub_824411B8(ctx, base);
+  __imp__sub_824411E0(ctx, base);
 }

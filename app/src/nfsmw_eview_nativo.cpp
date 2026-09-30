@@ -1,4 +1,4 @@
-// nfsmw - eViewPlatInterface::Render (sub_8243E358) in native code.
+// nfsmw - eViewPlatInterface::Render (sub_8243E380) in native code.
 //
 // WHAT IT IS
 //   Render(this = view, r4 = eModel, r5 = matrix, r6 = light, r7 = flags, r8 = bone palette) walks the
@@ -95,23 +95,23 @@
 #include <string>
 
 REXCVAR_DEFINE_BOOL(nfsmw_eview_nativo, true, "NFSMW",
-                    "eViewPlatInterface::Render (sub_8243E358, el bucle de submallas de cada modelo) en nativo, "
+                    "eViewPlatInterface::Render (sub_8243E380, el bucle de submallas de cada modelo) en nativo, "
                     "identico bit a bit (build 176). Se comprueba contra la original al empezar y 1 de cada 4096 "
                     "llamadas despues, y se apaga sola si difiere; false = la original")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 // This file only names by their 8 digits the functions it hooks or that were already hooked
 // (tools/llamadas_directas.py treats any 82xxxxxx address in app/src as hooked); the rest are split (8245_4428).
-REX_EXTERN(__imp__sub_8243E358);  // original Render (the hook is in nfsmw_sombras_lod.cpp and calls Render() from here)
-REX_EXTERN(__imp__sub_82452868);  // draw packet
-REX_EXTERN(__imp__sub_82500010);
+REX_EXTERN(__imp__sub_8243E380);  // original Render (the hook is in nfsmw_sombras_lod.cpp and calls Render() from here)
+REX_EXTERN(__imp__sub_82452890);  // draw packet
+REX_EXTERN(__imp__sub_82500038);
 REX_EXTERN(__imp__sub_82218B18);
 REX_EXTERN(__imp__sub_82218AB8);
-REX_EXTERN(sub_82452868);  // hooks in this file (called by name, like the original)
-REX_EXTERN(sub_82500010);
+REX_EXTERN(sub_82452890);  // hooks in this file (called by name, like the original)
+REX_EXTERN(sub_82500038);
 REX_EXTERN(sub_82218B18);
 REX_EXTERN(sub_82218AB8);
-REX_EXTERN(sub_8243E7D8);  // GetVisibleState: its hook is in nfsmw_d3d_registros_nativo.cpp
+REX_EXTERN(sub_8243E800);  // GetVisibleState: its hook is in nfsmw_d3d_registros_nativo.cpp
 
 namespace nfsmw::eview {
 void Render(PPCContext& ctx, uint8_t* base);
@@ -166,12 +166,12 @@ constexpr uint32_t kBanderaSalida = 0x82A2CFB7;  // lis r11,-32093; lbz r9,-1236
 constexpr uint32_t kTablaRemapeo = 0x8293CC68;   // lis r10,-32108; addi r19,r10,-13208
 constexpr uint32_t kClaveOmitir = 0x82A45274;    // lis r10,-32092; lwz r25,21108(r10)
 constexpr uint32_t kMarco = 784;                 // stwu r1,-784(r1)
-constexpr uint64_t kLrPrologo = 0x8243E360;      // bl 826b_dce8 (saves r16-r31: in the recompiled code it writes nothing)
-constexpr uint64_t kLr500010 = 0x8243E3C4;
-constexpr uint64_t kLrB18 = 0x8243E3DC;
-constexpr uint64_t kLrVisible = 0x8243E48C;
-constexpr uint64_t kLrPaquete = 0x8243E554;
-constexpr uint64_t kLrAB8 = 0x8243E574;
+constexpr uint64_t kLrPrologo = 0x8243E388;      // bl 826b_dce8 (saves r16-r31: in the recompiled code it writes nothing)
+constexpr uint64_t kLr500010 = 0x8243E3EC;
+constexpr uint64_t kLrB18 = 0x8243E404;
+constexpr uint64_t kLrVisible = 0x8243E4B4;
+constexpr uint64_t kLrPaquete = 0x8243E57C;
+constexpr uint64_t kLrAB8 = 0x8243E59C;
 constexpr uint64_t kR11Bandera = 0xFFFFFFFF82A30000ull;  // lis r11,-32093 (signed, in 64 bits)
 
 struct Entrada {
@@ -194,7 +194,7 @@ template <class P>
   const uint64_t marco64 = Marco64(e.r1);
   const uint32_t R1 = uint32_t(marco64);
   p.E32(R1, uint32_t(e.r1));  // stwu r1,-784(r1) (16409)
-  p.Prologo(e, marco64);      // mflr r12; bl (lr = 0x8243E360); r1 = marco
+  p.Prologo(e, marco64);      // mflr r12; bl (lr = 0x8243E388); r1 = marco
   const uint32_t modelo = uint32_t(e.r4);
   const uint32_t r29 = p.L32(modelo + 12);  // lwz r29,12(r17)
   if (r29 == 0) {
@@ -351,7 +351,7 @@ struct Real {
     ctx.r4.u64 = r4;
     ctx.r3.u64 = r3;
     ctx.lr = kLr500010;
-    sub_82500010(ctx, base);
+    sub_82500038(ctx, base);
   }
   void LlamarB18(uint64_t r3, uint64_t r4) const {
     ctx.r4.u64 = r4;
@@ -365,7 +365,7 @@ struct Real {
     ctx.r4.u64 = r4;
     ctx.r3.u64 = r3;
     ctx.lr = kLrVisible;
-    sub_8243E7D8(ctx, base);
+    sub_8243E800(ctx, base);
     return ctx.r3.u32;
   }
   void Paquete(uint64_t r3, uint64_t r4, uint64_t r5, uint64_t r6, uint64_t r7, uint64_t r8, uint64_t r9,
@@ -379,7 +379,7 @@ struct Real {
     ctx.r4.u64 = r4;
     ctx.r3.u64 = r3;
     ctx.lr = kLrPaquete;
-    sub_82452868(ctx, base);
+    sub_82452890(ctx, base);
   }
   void LlamarAB8(uint64_t r3, uint64_t r4) const {
     ctx.r4.u64 = r4;
@@ -528,7 +528,7 @@ struct Repeticion {
     cv.r4.u64 = r4;
     cv.r3.u64 = r3;
     cv.lr = kLrVisible;
-    sub_8243E7D8(cv, base);
+    sub_8243E800(cv, base);
     return cv.r3.u32;
   }
   void Paquete(uint64_t r3, uint64_t r4, uint64_t r5, uint64_t r6, uint64_t r7, uint64_t r8, uint64_t r9,
@@ -596,7 +596,7 @@ void Informe() {
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   const int64_t desde = g_desde_ms.exchange(ahora, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[eview] Render (8243E358) en nativo (build 176): se comprueban contra la original las primeras {} "
+    REXLOG_INFO("[eview] Render (8243E380) en nativo (build 176): se comprueban contra la original las primeras {} "
                 "llamadas y despues 1 de cada {}",
                 kComprobacionesRender, kPeriodo);
     g_medidas.store(0, std::memory_order_relaxed);
@@ -704,7 +704,7 @@ void Apagar(const PPCContext& ctx, uint64_t n, const char* que, bool de_la_traza
     Sumar(g_sin_comprobar, uint64_t(1));
     if (n <= kComprobacionesRender) {
       Sumar(g_originales, uint64_t(1));
-      __imp__sub_8243E358(ctx, base);
+      __imp__sub_8243E380(ctx, base);
     } else {
       RenderNativo(ctx, base);
       Sumar(g_nativas, uint64_t(1));
@@ -736,7 +736,7 @@ void Apagar(const PPCContext& ctx, uint64_t n, const char* que, bool de_la_traza
     t.s.Anadir(base, R1 + 96 + 4 * i);
   }
   // 2. The original, for real, with its calls in trace mode (3. the replay happens inside 8221_8AB8).
-  __imp__sub_8243E358(ctx, base);
+  __imp__sub_8243E380(ctx, base);
   if (!t.repetida) {
     Repetir(ctx, base, false);  // paths 1 and 2: the original did not reach 8221_8AB8
   }
@@ -805,10 +805,10 @@ inline void Apuntar(const Evento& x) {
 
 }  // namespace
 
-// The entry point of Render: the sub_8243E358 hook in nfsmw_sombras_lod.cpp calls it instead of the original.
+// The entry point of Render: the sub_8243E380 hook in nfsmw_sombras_lod.cpp calls it instead of the original.
 void Render(PPCContext& ctx, uint8_t* base) {
   if (!Activo() || g_apagado.load(std::memory_order_relaxed)) {
-    __imp__sub_8243E358(ctx, base);
+    __imp__sub_8243E380(ctx, base);
     return;
   }
   const uint64_t n = g_llamadas.load(std::memory_order_relaxed) + 1;
@@ -835,19 +835,19 @@ void Render(PPCContext& ctx, uint8_t* base) {
 // Render's calls to these four functions must go to sub_X and not to __imp__sub_X (tools/llamadas_directas.py
 // leaves them as sub_X because they are hooked here). Only Render calls them: the hooks change nothing for anyone
 // else.
-REX_HOOK_RAW(sub_82452868) {  // the draw packet of each submesh
+REX_HOOK_RAW(sub_82452890) {  // the draw packet of each submesh
   using namespace nfsmw::eview;
   if (EnTraza(ctx, kLrPaquete)) [[unlikely]] {
     TrazarPaquete(ctx, base);
   }
-  __imp__sub_82452868(ctx, base);
+  __imp__sub_82452890(ctx, base);
 }
-REX_HOOK_RAW(sub_82500010) {
+REX_HOOK_RAW(sub_82500038) {
   using namespace nfsmw::eview;
   if (EnTraza(ctx, kLr500010)) [[unlikely]] {
     Apuntar(Evento{k500010, {ctx.r3.u64, ctx.r4.u64, ctx.r5.u64, 0, 0, 0, 0, 0}, {}});
   }
-  __imp__sub_82500010(ctx, base);
+  __imp__sub_82500038(ctx, base);
 }
 REX_HOOK_RAW(sub_82218B18) {  // puts the model's replacement textures in place
   using namespace nfsmw::eview;

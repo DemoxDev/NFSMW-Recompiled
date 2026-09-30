@@ -14,35 +14,35 @@
 //   alley) that is 37 meters. That is why it arrives late exactly where it is noticeable.
 //
 // Where it is in the recompiled binary   (see "The proof" below)
-//   sub_824BE0A8 = TrackStreamer::GetPredictedZone(StreamingPositionEntry* r4)
+//   sub_824BE0D0 = TrackStreamer::GetPredictedZone(StreamingPositionEntry* r4)
 //                  app/generated/default/nfsmw_recomp.99.cpp:18500
-//   sub_824BEF30 = TrackStreamer::DetermineCurrentZones   nfsmw_recomp.129.cpp:17543  (only caller)
-//   sub_824BE4E8 = TrackStreamer::DetermineStreamingSections  nfsmw_recomp.88.cpp:18083
-//   sub_824BA290 = TrackPathManager::FindZone             nfsmw_recomp.37.cpp:18450
-//   sub_824C5DA0 = VisibleSectionManager::FindDrivableSection  nfsmw_recomp.77.cpp:18030
-//   sub_824B9690 = TrackStreamingBarrier::Intersects
+//   sub_824BEF58 = TrackStreamer::DetermineCurrentZones   nfsmw_recomp.129.cpp:17543  (only caller)
+//   sub_824BE510 = TrackStreamer::DetermineStreamingSections  nfsmw_recomp.88.cpp:18083
+//   sub_824BA2B8 = TrackPathManager::FindZone             nfsmw_recomp.37.cpp:18450
+//   sub_824C5DC8 = VisibleSectionManager::FindDrivableSection  nfsmw_recomp.77.cpp:18030
+//   sub_824B96B8 = TrackStreamingBarrier::Intersects
 //   Globals: TheTrackPathManager = 0x82C59DA0, TheVisibleSectionManager = 0x82C52C48
 //   Game constants (floats, big endian, in guest memory):
 //     0x82060E74 = 1.5f      seconds of lookahead          (lfs f29,-5724(r28), r28 = 0x820624D0)
 //     0x82040200 = 100.0f    cap in meters                 (lfs f31,512(r10),  r10 = 0x82040000)
-//     0x820B069C = 178.816f  MPH2MPS(400), no prediction above it  (lfs f27,1692(r11))
+//     0x820B06AC = 178.816f  MPH2MPS(400), no prediction above it  (lfs f27,1692(r11))
 //     0x82061CE8 = 0.0f      (the same base nfsmw_escenario_lod.cpp already used)
 //
-// The proof that sub_824BE0A8 is GetPredictedZone
+// The proof that sub_824BE0D0 is GetPredictedZone
 //   1. Anchor: DetermineStreamingSections calls GetScenerySectionNumber('Y'/'X'/'Z', 0), which is
 //      inline and equals (letter-'A'+1)*100 -> 2500 / 2400 / 2600. Those three immediates in a row
-//      appear in only one place in the 141 MB of generated code: sub_824BE4E8. And its first call
-//      is to sub_824BE340, which is RemoveCurrentStreamingSections, as in the source.
-//   2. From there, in address order, sub_824BE0A8 falls where the source puts GetPredictedZone
+//      appear in only one place in the 141 MB of generated code: sub_824BE510. And its first call
+//      is to sub_824BE368, which is RemoveCurrentStreamingSections, as in the source.
+//   2. From there, in address order, sub_824BE0D0 falls where the source puts GetPredictedZone
 //      (TrackStreamer.cpp:1457) and its body matches instruction by instruction:
 //        lfs f13,12(r31) / fmuls / lfs f0,16(r31) / fmadds / fsqrts f30   -> speed = bLength(Velocity)
-//        bl 0x824ba290 with r5=6 and r6=0                                 -> FindZone(&Position, 6, zone)
+//        bl 0x824ba2b8 with r5=6 and r6=0                                 -> FindZone(&Position, 6, zone)
 //        lfs f0,20(r30) ; fcmpu vs 0.0 ; fabs                             -> zone->GetElevation()
 //        fcmpu f30 vs f27 ; ble                                           -> speed > MPH2MPS(400)
 //        fmuls f7,f30,f29 ; fcmpu f7,f31 ; ble                            -> (speed*1.5f) > 100.0f
 //        fdivs f0,f31,f30 ; fmadds f2,f4,f0,f6                            -> pos + vel*(100.0f/speed)
 //        fmadds f10,f12,f29,f0                                            -> pos + vel*1.5f
-//        bl 0x824c5da0 ; loop of 4 over zone+48 ; loop over 16-byte barriers ; extsh r3
+//        bl 0x824c5dc8 ; loop of 4 over zone+48 ; loop over 16-byte barriers ; extsh r3
 //   3. The caller does `addi r4,r31,-36` and first checks `lbz r11,-8(r31)`: r31-8 is the same
 //      object +0x1C, which is exactly StreamingPositionEntry::PositionSet (TrackStreamer.hpp:88).
 //
@@ -56,7 +56,7 @@
 //   The key is that GetPredictedZone reads the velocity twice:
 //     a) on entry, to compute `speed` (it stays in f30, which is callee-saved and is not recomputed);
 //     b) further down, again from memory, to build the offset (lfs f4,12(r31)).
-//   And between (a) and (b) there is always a call to FindZone (sub_824BA290), because the offset is
+//   And between (a) and (b) there is always a call to FindZone (sub_824BA2B8), because the offset is
 //   computed inside the loop and the loop starts there.
 //
 //   So: the real velocity is left in place on entry (so `speed` is the real one and both comparisons,
@@ -71,7 +71,7 @@
 // Safety
 //   - The velocity is always restored on exit, to the exact previous value. GetPredictedZone does
 //     not write to the entry: it only reads. The window is microseconds long and on the same thread.
-//   - If sub_824BA290 were not FindZone, or if the map had no prediction zones, the change is not
+//   - If sub_824BA2B8 were not FindZone, or if the map had no prediction zones, the change is not
 //     applied and the game behaves as always. The "aplicadas" counter says so.
 //   - Safety net: with the diagnostic on, it is also called without the lookahead. If the lookahead
 //     overshoots and the prediction collapses (it returns 0, or stays in the current zone, which is
@@ -139,7 +139,7 @@ namespace {
 // Guest addresses. See the header comment for how they were found.
 constexpr uint32_t kDirSegundos = 0x82060E74;  // float 1.5f
 constexpr uint32_t kDirTecho = 0x82040200;     // float 100.0f
-constexpr uint32_t kDirVelMax = 0x820B069C;    // float 178.816f = MPH2MPS(400)
+constexpr uint32_t kDirVelMax = 0x820B06AC;    // float 178.816f = MPH2MPS(400)
 
 // StreamingPositionEntry (TrackStreamer.hpp:82). Confirmed in the disassembly.
 constexpr uint32_t kOffVelX = 12;        // bVector2 Velocity
@@ -240,11 +240,11 @@ void QuizaImprimir() {
 //
 // r4 is read before calling the original on purpose: r4 is volatile and the original clobbers it.
 // =================================================================================================
-REX_EXTERN(__imp__sub_824BA290);
-REX_HOOK_RAW(sub_824BA290) {
+REX_EXTERN(__imp__sub_824BA2B8);
+REX_HOOK_RAW(sub_824BA2B8) {
   using namespace nfsmw::streaming_anticipacion;
   const uint32_t arg = ctx.r4.u32;
-  __imp__sub_824BA290(ctx, base);
+  __imp__sub_824BA2B8(ctx, base);
   if (!t_armado || arg == 0 || arg != t_entrada) {
     return;
   }
@@ -257,8 +257,8 @@ REX_HOOK_RAW(sub_824BA290) {
 // TrackStreamer::GetPredictedZone(StreamingPositionEntry* r4) -> short
 // Returns the section number of the zone the streamer is going to queue for loading.
 // =================================================================================================
-REX_EXTERN(__imp__sub_824BE0A8);
-REX_HOOK_RAW(sub_824BE0A8) {
+REX_EXTERN(__imp__sub_824BE0D0);
+REX_HOOK_RAW(sub_824BE0D0) {
   using namespace nfsmw::streaming_anticipacion;
 
   g_llamadas.fetch_add(1, std::memory_order_relaxed);
@@ -268,7 +268,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
 
   if (mult_pct <= 100 || g_constantes_mal.load(std::memory_order_relaxed) || entrada == 0 ||
       entrada + kOffZonaActual + 2u >= kDireccionMaxima) {
-    __imp__sub_824BE0A8(ctx, base);
+    __imp__sub_824BE0D0(ctx, base);
     QuizaImprimir();
     return;
   }
@@ -284,7 +284,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
                   "anticipacion DESACTIVADA, el juego se queda como estaba",
                   double(k_seg), double(k_techo));
     }
-    __imp__sub_824BE0A8(ctx, base);
+    __imp__sub_824BE0D0(ctx, base);
     QuizaImprimir();
     return;
   }
@@ -295,7 +295,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
   const float s = std::sqrt(vx * vx + vy * vy);
   // Stopped or nearly so: there is no direction to look ahead in and the game does not predict either.
   if (!std::isfinite(s) || s <= 1.0f) {
-    __imp__sub_824BE0A8(ctx, base);
+    __imp__sub_824BE0D0(ctx, base);
     QuizaImprimir();
     return;
   }
@@ -304,7 +304,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
   const float antes = std::min(k_seg * s, k_techo);                          // what the game looks at
   const float despues = std::min(k_seg * s * (float(mult_pct) / 100.0f), techo);  // what we want
   if (!(despues > antes + 0.5f)) {
-    __imp__sub_824BE0A8(ctx, base);
+    __imp__sub_824BE0D0(ctx, base);
     QuizaImprimir();
     return;
   }
@@ -318,7 +318,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
    */
   float largo = (k_seg * s > k_techo) ? (despues * s / k_techo) : (despues / k_seg);
   if (!std::isfinite(largo) || largo <= 0.0f) {
-    __imp__sub_824BE0A8(ctx, base);
+    __imp__sub_824BE0D0(ctx, base);
     QuizaImprimir();
     return;
   }
@@ -340,7 +340,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
     const uint64_t r4_orig = ctx.r4.u64;
     const uint64_t lr_orig = ctx.lr;
     t_armado = false;  // keep the handoff from touching anything in the reference call
-    __imp__sub_824BE0A8(ctx, base);
+    __imp__sub_824BE0D0(ctx, base);
     zona_base = int32_t(int16_t(uint16_t(ctx.r3.u32)));
     ctx.r3.u64 = r3_orig;
     ctx.r4.u64 = r4_orig;
@@ -348,7 +348,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
   }
 
   t_armado = true;
-  __imp__sub_824BE0A8(ctx, base);
+  __imp__sub_824BE0D0(ctx, base);
   t_armado = false;
 
   // Always restore, whether it was applied or not: writing back the same value costs nothing.
@@ -364,7 +364,7 @@ REX_HOOK_RAW(sub_824BE0A8) {
   } else {
     // The handoff did not engage: FindZone was never called with this entry, so the velocity was
     // never changed and the result is the game's own. If this number resembles the "con adelanto"
-    // one, the hook is not doing anything and sub_824BA290 needs checking.
+    // one, the hook is not doing anything and sub_824BA2B8 needs checking.
     g_sin_relevo.fetch_add(1, std::memory_order_relaxed);
   }
 

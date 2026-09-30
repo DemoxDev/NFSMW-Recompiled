@@ -1,14 +1,14 @@
 // nfsmw - per-draw material parameters, in native code.
 //
 // WHAT IT IS
-//   sub_824511E8 prepares on the game thread, for every draw with a material, up to 11 effect parameters
+//   sub_82451210 prepares on the game thread, for every draw with a material, up to 11 effect parameters
 //   (constant floats, two 16-bit integers converted to float, two integers converted to float, an integer and
 //   a vector) by calling the parameter "writers" of the game's D3DX:
-//     8244F2E0  32-bit integer                (this, &handle, value)           stwx
-//     82449360  float                         (effect, handle, &value)         lvlx + stvewx
-//     82449618  integer converted to float    (effect, handle, &value)         lvlx + vcfsx + stvewx
-//     82449988  16-byte vector                (effect, handle, &vector)        lvx128 + stvx128
-//     82449C00  4x4 matrix (the rows given by the entry, transposed)            4 x lvx128, vsel, 4 x stvx
+//     8244F308  32-bit integer                (this, &handle, value)           stwx
+//     82449388  float                         (effect, handle, &value)         lvlx + stvewx
+//     82449640  integer converted to float    (effect, handle, &value)         lvlx + vcfsx + stvewx
+//     824499B0  16-byte vector                (effect, handle, &vector)        lvx128 + stvx128
+//     82449C28  4x4 matrix (the rows given by the entry, transposed)            4 x lvx128, vsel, 4 x stvx
 //   They all do the same with the parameter's handle: bit 0 = group (0 the effect's, 1 the shared one),
 //   bits 1-17 = "dirty" bit they set in the group's mask, bits 18-31 = 8-byte entry in the group's table;
 //   the second word of the entry (& 0xFFFF) is the target constant register (16 bytes).
@@ -16,22 +16,22 @@
 //     shared group (odd handle):       dirty = [effect+256],  table = [[effect+268]], dest = [[effect+300]]
 //
 // WHY NATIVE
-//   Stack sampling on the console: 824511E8 with the writers inlined by LTO weighs 3-4 % of a core of the
-//   game thread, and 82449C00 another 1.4-2.8 % from other callers. Recompiled, each writer loads the fields
+//   Stack sampling on the console: 82451210 with the writers inlined by LTO weighs 3-4 % of a core of the
+//   game thread, and 82449C28 another 1.4-2.8 % from other callers. Recompiled, each writer loads the fields
 //   of both groups and picks with masks, every PowerPC register ends up stored in the context, the value
-//   goes through ctx.v0 in memory and 824511E8 writes the FPCR (msr fpcr) up to four times per call when
+//   goes through ctx.v0 in memory and 82451210 writes the FPCR (msr fpcr) up to four times per call when
 //   switching between scalar and vector mode and back. Here: only the chosen group, no context except what
 //   someone reads afterwards and no FPCR change halfway through.
 //
 // WHY IT IS BIT-IDENTICAL (read instruction by instruction in nfsmw_recomp.95/120/12/128/43/96)
-//   - Only integers and bit copies are involved. The "lfs + stfs" of constants in 824511E8 are a copy of
+//   - Only integers and bit copies are involved. The "lfs + stfs" of constants in 82451210 are a copy of
 //     the word: GCC folds float->double->float (checked with devkitA64 16.1 -O3 and with the disassembly:
 //     the recompiled code stores the word it read as is). The "extsh, std, lfd, fcfid, frsp, stfs" of the
 //     16-bit integers is exact in any rounding mode. vcfsx uses the same simde conversion here as the
 //     recompiled code, with the same FPCR (flush mode does not affect an integer to float conversion).
 //   - The same memory reads and writes in the same relative order, including the stack writes the
-//     original makes and nobody reads afterwards (824511E8's prologue, the value slot at r1+80, the scratch
-//     area of 82449360 and 82449618 at r1-80..r1-68): guest memory ends up identical byte for byte, stack
+//     original makes and nobody reads afterwards (82451210's prologue, the value slot at r1+80, the scratch
+//     area of 82449388 and 82449640 at r1-80..r1-68): guest memory ends up identical byte for byte, stack
 //     included. This is not a whim: a later lvlx reads 16 bytes and an stvewx to a destination not aligned
 //     to 16 would store those leftovers.
 //   - lvlx/stvewx are done with the exact semantics of the recompiled code (VectorMaskL): word
@@ -41,9 +41,9 @@
 //   - Registers: interprocedural liveness analysis of all the generated code: after the 179 calls to these
 //     six functions nobody reads a volatile register that the original leaves different, except r3 when
 //     the call is followed by the caller's return. r3 is left as the original does (the old dirty byte in
-//     8244F2E0/82449988, the bit mask in 82449C00; in 824511E8 that of its last step), r12 and lr as
-//     824511E8's epilogue leaves them, and the FPCR flush mode as the original (on after 82449618, off after
-//     824511E8). cr, ctr and xer are local variables in the generated code.
+//     8244F308/824499B0, the bit mask in 82449C28; in 82451210 that of its last step), r12 and lr as
+//     82451210's epilogue leaves them, and the FPCR flush mode as the original (on after 82449640, off after
+//     82451210). cr, ctr and xer are local variables in the generated code.
 //
 // SELF-CHECKING GUARD (cvar nfsmw_material_nativo; project rule)
 //   The first kComprobaciones calls of each function, and then 1 of every 4096, are checked against the
@@ -54,11 +54,11 @@
 //     writes are idempotent): it must leave everything the same again. That proves it writes to exactly the
 //     same addresses and, since each original writer does a fixed number of writes without branches, to no
 //     other.
-//   - 824511E8: the native version records writes and the list of calls to writers (type, r3, r4, r5 and
+//   - 82451210: the native version records writes and the list of calls to writers (type, r3, r4, r5 and
 //     the 16 bytes of the value). It is undone and the original runs, whose calls go through the writers'
 //     hooks in "trace mode": they record the call and do their full check against the original writer.
 //     The list, the written bytes and r3/r12/lr/r1/FPCR must match.
-//   A single difference turns the function off for good (and 824511E8 if one of its writers fails), leaves
+//   A single difference turns the function off for good (and 82451210 if one of its writers fails), leaves
 //   the exact state of the original and writes "[material] DIFERENCIA" with the data. "[material]" line
 //   every 10 s.
 
@@ -76,17 +76,17 @@
 #include <string>
 
 REXCVAR_DEFINE_BOOL(nfsmw_material_nativo, true, "NFSMW",
-                    "Parametros de material por dibujo (sub_824511E8 y las escritoras 8244F2E0, 82449360, 82449618, "
-                    "82449988 y 82449C00) en nativo, identico bit a bit. Se comprueba contra la original al empezar y "
+                    "Parametros de material por dibujo (sub_82451210 y las escritoras 8244F308, 82449388, 82449640, "
+                    "824499B0 y 82449C28) en nativo, identico bit a bit. Se comprueba contra la original al empezar y "
                     "1 de cada 4096 llamadas despues, y se apaga sola si difiere")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REX_EXTERN(__imp__sub_824511E8);
-REX_EXTERN(__imp__sub_8244F2E0);
-REX_EXTERN(__imp__sub_82449360);
-REX_EXTERN(__imp__sub_82449618);
-REX_EXTERN(__imp__sub_82449988);
-REX_EXTERN(__imp__sub_82449C00);
+REX_EXTERN(__imp__sub_82451210);
+REX_EXTERN(__imp__sub_8244F308);
+REX_EXTERN(__imp__sub_82449388);
+REX_EXTERN(__imp__sub_82449640);
+REX_EXTERN(__imp__sub_824499B0);
+REX_EXTERN(__imp__sub_82449C28);
 
 namespace nfsmw::material {
 namespace {
@@ -196,7 +196,7 @@ struct Memoria {
 // Fixed addresses (PowerPC lis + offset; checked with the PC test).
 // ---------------------------------------------------------------------------------------------------------------
 constexpr uint32_t kTablaBits = 0x8290DB68;      // lis r8,-32111; addi r8,r8,-9368: the mask of each bit (8 bytes)
-constexpr uint32_t kTablaFilas = 0x8208F7C0;     // lis r10,-32247; addi r7,r10,-2112: row masks of 82449C00
+constexpr uint32_t kTablaFilas = 0x8208F7D0;     // lis r10,-32247; addi r7,r10,-2112: row masks of 82449C28
 constexpr uint32_t kModo = 0x82A2CFB8;           // lwz r11,-12360(0x82A30000)
 constexpr uint32_t kPartida = 0x82A39AD8;        // lis r11,-32092; addi r11,r11,-25928; lwz r11,32(r11)
 constexpr uint32_t kBandera = 0x82A2D1A4;        // lbz r6,-11868(0x82A30000)
@@ -265,7 +265,7 @@ inline uint32_t FloatDeEntero(uint32_t entero) {
 // .cpp in parentheses).
 // ---------------------------------------------------------------------------------------------------------------
 
-// 8244F2E0 (nfsmw_recomp.120.cpp:16033): r3 = this, r4 = &mango (the handle), r5 = valor. Leaves r3 = the old dirty byte.
+// 8244F308 (nfsmw_recomp.120.cpp:16033): r3 = this, r4 = &mango (the handle), r5 = valor. Leaves r3 = the old dirty byte.
 template <bool A>
 inline uint32_t EscritoraF2E0(Memoria<A>& m, uint32_t self, uint32_t puntero_mango, uint32_t valor) {
   uint8_t* const base = m.base;
@@ -282,7 +282,7 @@ inline uint32_t EscritoraF2E0(Memoria<A>& m, uint32_t self, uint32_t puntero_man
   return viejo;
 }
 
-// 82449360 (nfsmw_recomp.12.cpp:16845): r3 = effect, r4 = handle, r5 = &float. r3 does not change.
+// 82449388 (nfsmw_recomp.12.cpp:16845): r3 = effect, r4 = handle, r5 = &float. r3 does not change.
 template <bool A>
 inline void Escritora9360(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32_t p, uint32_t r1) {
   uint8_t* const base = m.base;
@@ -304,7 +304,7 @@ inline void Escritora9360(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32
   m.Escribir32(ea, PalabraLvlx(bloque, p & 0xFu, (ea & 0xFu) >> 2));        // stvewx v0,r0,r4
 }
 
-// 82449618 (nfsmw_recomp.128.cpp:16693): like 82449360 but the value is an integer converted to float (vcfsx)
+// 82449640 (nfsmw_recomp.128.cpp:16693): like 82449388 but the value is an integer converted to float (vcfsx)
 // and the stack scratch area goes in a different order. r3 does not change; the original leaves flush mode on.
 template <bool A>
 inline void Escritora9618(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32_t p, uint32_t r1) {
@@ -327,7 +327,7 @@ inline void Escritora9618(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32
   m.Escribir32(ea, FloatDeEntero(PalabraLvlx(bloque, p & 0xFu, (ea & 0xFu) >> 2)));  // stvewx v0,r0,r4
 }
 
-// 82449988 (nfsmw_recomp.43.cpp:16541): r3 = effect, r4 = handle, r5 = &vector. Aligned 16-byte copy.
+// 824499B0 (nfsmw_recomp.43.cpp:16541): r3 = effect, r4 = handle, r5 = &vector. Aligned 16-byte copy.
 // Leaves r3 = old dirty byte.
 template <bool A>
 inline uint32_t Escritora9988(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32_t p) {
@@ -345,7 +345,7 @@ inline uint32_t Escritora9988(Memoria<A>& m, uint32_t efecto, uint32_t mango, ui
   return viejo;
 }
 
-// 82449C00 (nfsmw_recomp.96.cpp:16517): r3 = effect, r4 = handle, r5 = &matrix (4 rows of 16 bytes). Each
+// 82449C28 (nfsmw_recomp.96.cpp:16517): r3 = effect, r4 = handle, r5 = &matrix (4 rows of 16 bytes). Each
 // output row i is (row_i & ~M) | (column_i & M), with M the row mask chosen by the first word of the entry.
 // These are bitwise operations on whole words: the byte order within each word does not matter.
 // Leaves r3 = the mask of the dirty bit.
@@ -381,13 +381,13 @@ inline uint32_t EscritoraC00(Memoria<A>& m, uint32_t efecto, uint32_t mango, uin
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// List of calls to writers (824511E8 guard): the native version records it when calling each one, and the
-// original through the hooks in trace mode. dato = the 16 bytes of the value's block (or [r4] in 8244F2E0).
+// List of calls to writers (82451210 guard): the native version records it when calling each one, and the
+// original through the hooks in trace mode. dato = the 16 bytes of the value's block (or [r4] in 8244F308).
 // ---------------------------------------------------------------------------------------------------------------
 enum Tipo : uint8_t { kF2E0 = 0, k9360 = 1, k9618 = 2, k9988 = 3, kC00 = 4, kMaterial = 5, kTipos = 6 };
-constexpr const char* kNombres[kTipos] = {"8244F2E0", "82449360", "82449618", "82449988", "82449C00", "824511E8"};
+constexpr const char* kNombres[kTipos] = {"8244F308", "82449388", "82449640", "824499B0", "82449C28", "82451210"};
 
-constexpr uint32_t kMaxLlamadas = 16;  // 824511E8 makes at most 11
+constexpr uint32_t kMaxLlamadas = 16;  // 82451210 makes at most 11
 
 struct LlamadaEscritora {
   uint8_t tipo;
@@ -423,7 +423,7 @@ inline void Apuntar(Plan* plan, uint8_t* base, uint8_t tipo, uint32_t r3, uint32
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// 824511E8 (nfsmw_recomp.95.cpp:16110). r3 = the material object: [this+12] = handle table, [this+28] = effect.
+// 82451210 (nfsmw_recomp.95.cpp:16110). r3 = the material object: [this+12] = handle table, [this+28] = effect.
 // ---------------------------------------------------------------------------------------------------------------
 struct SalidaMaterial {
   uint32_t r3;
@@ -444,11 +444,11 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
   const uint32_t hueco = r1 + 80;  // the value is passed to the writers through here
   uint32_t r3 = self;
 
-  // +456 -> 8244F2E0(this, &handle, integer from the table at 0x82A15370)
+  // +456 -> 8244F308(this, &handle, integer from the table at 0x82A15370)
   {
     const uint32_t mango = Leer32(base, Leer32(base, self + 12) + 456);
     if (mango != 0) {
-      bool primero = false;  // loc_82451270 (entry 1 of the table) or loc_82451280 (the indexed one)
+      bool primero = false;  // loc_82451298 (entry 1 of the table) or loc_824512A8 (the indexed one)
       if (Leer16(base, Leer32(base, kModo) + 4) == 7) {
         primero = Leer32(base, kPartida) != 6 || (Leer8(base, kBandera) == 0 && Leer32(base, kValor1) == 1);
       }
@@ -459,7 +459,7 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
       r3 = EscritoraF2E0(m, self, hueco, valor);
     }
   }
-  // +444, +480 and +440 -> 82449360 with a constant float (lfs + stfs = copy of the word). Before +480, the
+  // +444, +480 and +440 -> 82449388 with a constant float (lfs + stfs = copy of the word). Before +480, the
   // original leaves r3 = [this+12] (lwz r3,12(r31)) even though it makes no call.
   const uint32_t kPasosFloat[3][2] = {{444, kConst444}, {480, kConst480}, {440, kConst440}};
   for (uint32_t i = 0; i < 3; ++i) {
@@ -476,7 +476,7 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
       r3 = efecto;
     }
   }
-  // +460 and +464 -> 82449360 with the same float (f31, read once before the first one).
+  // +460 and +464 -> 82449388 with the same float (f31, read once before the first one).
   uint32_t f31 = 0;
   for (uint32_t i = 0; i < 2; ++i) {
     const uint32_t mango = Leer32(base, Leer32(base, self + 12) + (i == 0 ? 460u : 464u));
@@ -491,7 +491,7 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
       r3 = efecto;
     }
   }
-  // +476 -> 82449618 with the integer 1
+  // +476 -> 82449640 with the integer 1
   {
     const uint32_t mango = Leer32(base, Leer32(base, self + 12) + 476);
     if (mango != 0) {
@@ -502,7 +502,7 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
       r3 = efecto;
     }
   }
-  // +0 -> 82449988 with the vector at [0x82A2C4F8] + 48
+  // +0 -> 824499B0 with the vector at [0x82A2C4F8] + 48
   {
     const uint32_t mango = Leer32(base, Leer32(base, self + 12) + 0);
     if (mango != 0) {
@@ -512,7 +512,7 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
       r3 = Escritora9988(m, efecto, mango, vector);
     }
   }
-  // +116 and +120 -> 82449360 with the signed 16-bit integers at [0x82A2D174] + 68 / + 70 converted to float
+  // +116 and +120 -> 82449388 with the signed 16-bit integers at [0x82A2D174] + 68 / + 70 converted to float
   // (extsh, std, lfd, fcfid, frsp, stfs). The std leaves the integer's 8 bytes in the slot; the stfs overwrites
   // the first 4 with the float and the other 4 remain (they are word 1 of the block the lvlx reads).
   for (uint32_t i = 0; i < 2; ++i) {
@@ -528,7 +528,7 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
       r3 = efecto;
     }
   }
-  // +448 -> 82449618 with the byte at 0x82A2D1A5
+  // +448 -> 82449640 with the byte at 0x82A2D1A5
   {
     const uint32_t mango = Leer32(base, Leer32(base, self + 12) + 448);
     if (mango != 0) {
@@ -548,8 +548,8 @@ SalidaMaterial MaterialNativo(Memoria<A>& m, uint32_t self, uint32_t r1o, uint64
 // threads count at the same time a count can be lost, which does not matter.
 // ---------------------------------------------------------------------------------------------------------------
 constexpr uint64_t kComprobaciones = 50000;  // of each function; then 1 of every 4096
-constexpr uint32_t kMaxAnotEscritora = 8;    // 82449360/82449618: 4 stack + dirty + value; 82449C00: 5
-constexpr uint32_t kMaxAnotMaterial = 96;    // 824511E8: 75 at most
+constexpr uint32_t kMaxAnotEscritora = 8;    // 82449388/82449640: 4 stack + dirty + value; 82449C28: 5
+constexpr uint32_t kMaxAnotMaterial = 96;    // 82451210: 75 at most
 
 struct Contadores {
   std::atomic<uint64_t> llamadas{0};      // all of them (decides which ones are checked)
@@ -562,7 +562,7 @@ struct Contadores {
 Contadores g_c[kTipos];
 std::atomic<int64_t> g_siguiente_ms{0};
 
-// 824511E8 guard in progress: the context of the thread running it (its writers record into g_traza).
+// 82451210 guard in progress: the context of the thread running it (its writers record into g_traza).
 std::atomic<PPCContext*> g_traza_ctx{nullptr};
 Plan g_traza;
 
@@ -593,7 +593,7 @@ void Informe() {
   }
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[material] parametros de material en nativo (824511E8 y sus escritoras); se comprueban contra la "
+    REXLOG_INFO("[material] parametros de material en nativo (82451210 y sus escritoras); se comprueban contra la "
                 "original las primeras {} llamadas de cada funcion y despues 1 de cada 4096",
                 kComprobaciones);
     return;
@@ -612,7 +612,7 @@ void Informe() {
 
 void Apagar(uint32_t tipo) {
   g_c[tipo].apagado.store(true, std::memory_order_relaxed);
-  // 824511E8 has the four writers it calls inlined: if one fails, it is turned off as well.
+  // 82451210 has the four writers it calls inlined: if one fails, it is turned off as well.
   if (tipo == kF2E0 || tipo == k9360 || tipo == k9618 || tipo == k9988) {
     g_c[kMaterial].apagado.store(true, std::memory_order_relaxed);
   }
@@ -677,15 +677,15 @@ void Envenenar(const Registro& r, uint8_t* base) {
 template <uint32_t T>
 inline void LlamarOriginal(PPCContext& ctx, uint8_t* base) {
   if constexpr (T == kF2E0) {
-    __imp__sub_8244F2E0(ctx, base);
+    __imp__sub_8244F308(ctx, base);
   } else if constexpr (T == k9360) {
-    __imp__sub_82449360(ctx, base);
+    __imp__sub_82449388(ctx, base);
   } else if constexpr (T == k9618) {
-    __imp__sub_82449618(ctx, base);
+    __imp__sub_82449640(ctx, base);
   } else if constexpr (T == k9988) {
-    __imp__sub_82449988(ctx, base);
+    __imp__sub_824499B0(ctx, base);
   } else {
-    __imp__sub_82449C00(ctx, base);
+    __imp__sub_82449C28(ctx, base);
   }
 }
 
@@ -711,7 +711,7 @@ inline uint32_t Nativa(Memoria<A>& m, const PPCContext& ctx) {
   }
 }
 
-// The registers someone can read afterwards (see header): r3 and, in 82449618, flush mode on.
+// The registers someone can read afterwards (see header): r3 and, in 82449640, flush mode on.
 template <uint32_t T>
 inline void AplicarRegistros(PPCContext& ctx, uint32_t r3) {
   if constexpr (PoneR3(T)) {
@@ -808,7 +808,7 @@ template <uint32_t T>
 inline void Escritora(PPCContext& ctx, uint8_t* base) {
   Contadores& c = g_c[T];
   if (g_traza_ctx.load(std::memory_order_relaxed) == &ctx) [[unlikely]] {
-    // Inside the 824511E8 guard: record the original's call and check the writer with it.
+    // Inside the 82451210 guard: record the original's call and check the writer with it.
     Apuntar(&g_traza, base, uint8_t(T), ctx.r3.u32, ctx.r4.u32, ctx.r5.u32);
     if (c.apagado.load(std::memory_order_relaxed)) {
       LlamarOriginal<T>(ctx, base);
@@ -839,7 +839,7 @@ inline void Escritora(PPCContext& ctx, uint8_t* base) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// 824511E8 as a hook.
+// 82451210 as a hook.
 // ---------------------------------------------------------------------------------------------------------------
 inline void MaterialRapido(PPCContext& ctx, uint8_t* base) {
   Memoria<false> m{base, nullptr};
@@ -867,14 +867,14 @@ bool MismoPlan(const Plan& a, const Plan& b, uint32_t& donde) {
   return a.n == b.n;
 }
 
-// 824511E8 guard. Always leaves the original's result.
+// 82451210 guard. Always leaves the original's result.
 [[gnu::noinline]] void ComprobarMaterial(PPCContext& ctx, uint8_t* base, uint64_t n) {
   PPCContext* libre = nullptr;
   if (!g_traza_ctx.compare_exchange_strong(libre, &ctx, std::memory_order_acquire, std::memory_order_relaxed)) {
     // Another thread is in its guard: the original at first; afterwards, the already checked native version.
     if (n <= kComprobaciones) {
       Sumar(g_c[kMaterial].originales, uint64_t(1));
-      __imp__sub_824511E8(ctx, base);
+      __imp__sub_82451210(ctx, base);
     } else {
       MaterialRapido(ctx, base);
       Sumar(g_c[kMaterial].nativas, uint64_t(1));
@@ -895,7 +895,7 @@ bool MismoPlan(const Plan& a, const Plan& b, uint32_t& donde) {
   Deshacer(reg, base);
   g_traza.n = 0;
   g_traza.lleno = false;
-  __imp__sub_824511E8(ctx, base);  // the original; its writers go through the hooks in trace mode
+  __imp__sub_82451210(ctx, base);  // the original; its writers go through the hooks in trace mode
   g_traza_ctx.store(nullptr, std::memory_order_release);
 
   uint32_t donde = 0;
@@ -914,7 +914,7 @@ bool MismoPlan(const Plan& a, const Plan& b, uint32_t& donde) {
   }
   Apagar(kMaterial);  // the state is already the original's
   const Anotacion* a = mala < reg.n ? &reg.a[mala] : nullptr;
-  REXLOG_INFO("[material] DIFERENCIA en sub_824511E8 ({}; llamada {}): this 0x{:08X} r1 0x{:08X}; escritoras "
+  REXLOG_INFO("[material] DIFERENCIA en sub_82451210 ({}; llamada {}): this 0x{:08X} r1 0x{:08X}; escritoras "
               "nativa {} original {} (primera distinta: {}); direccion 0x{:08X} nativa {} original {}; r3 nativa "
               "0x{:X} original 0x{:X}. Camino nativo APAGADO para siempre, se queda la original",
               motivo, g_c[kMaterial].comprobadas_total.load(std::memory_order_relaxed), self, r1o, plan.n,
@@ -924,7 +924,7 @@ bool MismoPlan(const Plan& a, const Plan& b, uint32_t& donde) {
 
 inline void Material(PPCContext& ctx, uint8_t* base) {
   if (!Activo()) {
-    __imp__sub_824511E8(ctx, base);
+    __imp__sub_82451210(ctx, base);
     return;
   }
   Contadores& c = g_c[kMaterial];
@@ -932,7 +932,7 @@ inline void Material(PPCContext& ctx, uint8_t* base) {
   c.llamadas.store(n, std::memory_order_relaxed);
   if (c.apagado.load(std::memory_order_relaxed)) [[unlikely]] {
     Sumar(c.originales, uint64_t(1));
-    __imp__sub_824511E8(ctx, base);  // calls the writers' hooks (which stay native while they are valid)
+    __imp__sub_82451210(ctx, base);  // calls the writers' hooks (which stay native while they are valid)
   } else if (n <= kComprobaciones || (n & 4095) == 0) [[unlikely]] {
     ComprobarMaterial(ctx, base, n);
   } else {
@@ -949,21 +949,21 @@ inline void Material(PPCContext& ctx, uint8_t* base) {
 
 // The hooks. The generated code's calls to these six addresses must go to sub_X and not to __imp__sub_X:
 // tools/llamadas_directas.py leaves them as sub_X because this file names their addresses.
-REX_HOOK_RAW(sub_824511E8) {
+REX_HOOK_RAW(sub_82451210) {
   nfsmw::material::Material(ctx, base);
 }
-REX_HOOK_RAW(sub_8244F2E0) {
+REX_HOOK_RAW(sub_8244F308) {
   nfsmw::material::Escritora<nfsmw::material::kF2E0>(ctx, base);
 }
-REX_HOOK_RAW(sub_82449360) {
+REX_HOOK_RAW(sub_82449388) {
   nfsmw::material::Escritora<nfsmw::material::k9360>(ctx, base);
 }
-REX_HOOK_RAW(sub_82449618) {
+REX_HOOK_RAW(sub_82449640) {
   nfsmw::material::Escritora<nfsmw::material::k9618>(ctx, base);
 }
-REX_HOOK_RAW(sub_82449988) {
+REX_HOOK_RAW(sub_824499B0) {
   nfsmw::material::Escritora<nfsmw::material::k9988>(ctx, base);
 }
-REX_HOOK_RAW(sub_82449C00) {
+REX_HOOK_RAW(sub_82449C28) {
   nfsmw::material::Escritora<nfsmw::material::kC00>(ctx, base);
 }

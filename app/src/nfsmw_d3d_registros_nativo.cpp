@@ -1,6 +1,6 @@
 // nfsmw - the dump of the changed registers of the game's D3D, in native code.
 //
-// WHAT sub_825A2AA0 IS
+// WHAT sub_825A2AE8 IS
 //   An Xbox 360 D3D function that the game calls from FlushState on every draw (~2,400 per
 //   frame): it walks a 64-bit mask of registers marked as changed and, for each run of
 //   consecutive bits, writes a type-0 PM4 packet into the command ring (header + the values
@@ -23,14 +23,14 @@
 //                 [r4+4] = ((n-1) << 16) | r28; r4 += 4          // header
 //                 n times: r29 += 4; r4 += 4; [r4] = [r29]       // word copy
 //                 mask <<= n (bitwise: 64 shifts leave 0)
-//             else: r4 = sub_825A29E8(r3, r4, r28, r29, n, 1); r29 += n*4; mask <<= n
+//             else: r4 = sub_825A2A30(r3, r4, r28, r29, n, 1); r29 += n*4; mask <<= n
 //             r5 = r28 + n
 //             repeat while mask != 0
 //     [r3+0] = r4
 //
 //   Note: the loop runs once even if the mask arrives as 0, and in that case it would copy
 //   ~2^32 words. The callers never do that, but to be exact in every case, with mask 0 the
-//   original is called. The ring-full path is also left to the game (sub_825A29E8), with the
+//   original is called. The ring-full path is also left to the game (sub_825A2A30), with the
 //   same registers and the same stack frame.
 //
 // HOW TO CHECK IT
@@ -39,7 +39,7 @@
 //   restores the original.
 //
 // At the end of the file: FlushState with a single marker packet (phase 2 of the Direct3D-level renderer,
-// cvar nfsmw_d3d_marcador) and the counter for the ring-full path (sub_825A29E8).
+// cvar nfsmw_d3d_marcador) and the counter for the ring-full path (sub_825A2A30).
 
 #include "nfsmw_nativo_ganchos.h"
 
@@ -59,7 +59,7 @@
 #include <type_traits>  // std::conditional_t in SetTextureNativo
 
 REXCVAR_DEFINE_BOOL(nfsmw_d3d_registros_nativo, true, "NFSMW",
-                    "Volcado de registros cambiados del D3D del juego (sub_825A2AA0) en nativo: una copia "
+                    "Volcado de registros cambiados del D3D del juego (sub_825A2AE8) en nativo: una copia "
                     "en vez de ~15-20 instrucciones por palabra. Resultado identico bit a bit")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
@@ -126,7 +126,7 @@ void Informe() {
   }
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[d3d_registros] volcado de registros del D3D en nativo (sub_825A2AA0)");
+    REXLOG_INFO("[d3d_registros] volcado de registros del D3D en nativo (sub_825A2AE8)");
     return;
   }
   const uint64_t llamadas = g_llamadas.exchange(0, std::memory_order_relaxed);
@@ -139,10 +139,10 @@ void Informe() {
 
 }  // namespace
 
-REX_EXTERN(__imp__sub_825A2AA0);
-REX_EXTERN(sub_825A29E8);
+REX_EXTERN(__imp__sub_825A2AE8);
+REX_EXTERN(sub_825A2A30);
 
-REX_HOOK_RAW(sub_825A2AA0) {
+REX_HOOK_RAW(sub_825A2AE8) {
   static const bool activo = REXCVAR_GET(nfsmw_d3d_registros_nativo);
   uint64_t mascara = ctx.r4.u64;
   // Phase 1 of the Direct3D-level renderer. Register base_registro + i comes from r6 + 4 * i.
@@ -151,7 +151,7 @@ REX_HOOK_RAW(sub_825A2AA0) {
     if (activo) {
       Sumar(g_lentos, uint64_t(1));
     }
-    __imp__sub_825A2AA0(ctx, base);
+    __imp__sub_825A2AE8(ctx, base);
     return;
   }
 
@@ -187,8 +187,8 @@ REX_HOOK_RAW(sub_825A2AA0) {
       ctx.r6.u64 = origen;
       ctx.r7.u64 = n;
       ctx.r8.u64 = 1;
-      ctx.lr = 0x825A2B0C;  // the one of "bl 0x825a29e8" at 0x825A2B08
-      sub_825A29E8(ctx, base);
+      ctx.lr = 0x825A2B54;  // the one of "bl 0x825a2a30" at 0x825A2B50
+      sub_825A2A30(ctx, base);
       ctx.r1.u64 = pila;
       escritura = ctx.r3.u32;
       r3_final = ctx.r3.u32;
@@ -215,7 +215,7 @@ REX_HOOK_RAW(sub_825A2AA0) {
 //
 // Other candidates for a native rewrite involve floating point (GetVisibleState: the box against the
 // 6 view planes), many branches (TreeCull and DrawAScenery of the scenery) or a lot of code (the effect
-// parameter upload, sub_826992F0). Rewriting them without knowing their cost would be a gamble, and a
+// parameter upload, sub_82699340). Rewriting them without knowing their cost would be a gamble, and a
 // rounding error in culling shows up as popping. These hooks change nothing (they call the original):
 // they count the calls and time 1 in every 16 (inclusive time: TreeCull includes DrawAScenery).
 // "[medida]" log line every 10 s: calls/s and estimated ms per second.
@@ -229,10 +229,10 @@ struct Medida {
   std::atomic<uint64_t> muestras{0};
   std::atomic<uint64_t> ns{0};
 };
-Medida g_m_visible{"GetVisibleState (8243E7D8)"};
-Medida g_m_draw{"DrawAScenery (824C2850)"};
-Medida g_m_tree{"TreeCull (824C2F48)"};
-Medida g_m_efecto{"parametros de efecto (826992F0)"};
+Medida g_m_visible{"GetVisibleState (8243E800)"};
+Medida g_m_draw{"DrawAScenery (824C2878)"};
+Medida g_m_tree{"TreeCull (824C2F70)"};
+Medida g_m_efecto{"parametros de efecto (82699340)"};
 Medida* const kMedidas[] = {&g_m_visible, &g_m_draw, &g_m_tree, &g_m_efecto};
 std::atomic<int64_t> g_siguiente_medida_ms{0};
 
@@ -279,7 +279,7 @@ inline void Medir(Medida& m, F&& llamar) {
 }  // namespace
 
 // ---------------------------------------------------------------------------------------------------
-// eViewPlatInterface::GetVisibleState (sub_8243E7D8) in native code, bit-identical.
+// eViewPlatInterface::GetVisibleState (sub_8243E800) in native code, bit-identical.
 //
 // WHAT IT DOES (PowerPC read instruction by instruction: nfsmw_recomp.5.cpp and, for the helper, .87.cpp)
 //   Input: r3 = view (6 planes of 16 bytes at [r3] + 192), r4 and r5 = minimum and maximum corners of the
@@ -341,12 +341,12 @@ inline void Medir(Medida& m, F&& llamar) {
 #include <rex/ppc/intrinsics.h>
 
 REXCVAR_DEFINE_BOOL(nfsmw_visible_nativo, true, "NFSMW",
-                    "eViewPlatInterface::GetVisibleState (sub_8243E7D8: la caja contra los 6 planos de la vista) en "
+                    "eViewPlatInterface::GetVisibleState (sub_8243E800: la caja contra los 6 planos de la vista) en "
                     "nativo (build 174), identico bit a bit. Se comprueba contra la original (las primeras 200.000 "
                     "llamadas y despues 1 de cada 4096) y se apaga sola si difiere; false = la original")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REX_EXTERN(__imp__sub_8243E7D8);
+REX_EXTERN(__imp__sub_8243E800);
 
 namespace {
 namespace visible {
@@ -653,7 +653,7 @@ void Comprobar(PPCContext& ctx, uint8_t* base, uint64_t n) {
   Calculo k;
   if (Desplazamiento(marco) != Desplazamiento(pila - 1) || !Calcular(ctx, base, k)) {
     Sumar(g_originales, uint64_t(1));
-    __imp__sub_8243E7D8(ctx, base);
+    __imp__sub_8243E800(ctx, base);
     return;
   }
   uint8_t* const p = Puntero(base, marco);
@@ -664,7 +664,7 @@ void Comprobar(PPCContext& ctx, uint8_t* base, uint64_t n) {
   std::memcpy(nativa, p, 128);
   const uint32_t csr_nativa = ctx.fpscr.csr;
   std::memcpy(p, antes, 128);  // the original starts from the same frame
-  __imp__sub_8243E7D8(ctx, base);
+  __imp__sub_8243E800(ctx, base);
 
   const char* que = nullptr;
   uint32_t byte = 0;
@@ -710,7 +710,7 @@ void Comprobar(PPCContext& ctx, uint8_t* base, uint64_t n) {
 void Llamada(PPCContext& ctx, uint8_t* base) {
   static const bool activo = REXCVAR_GET(nfsmw_visible_nativo);
   if (!activo || g_apagado.load(std::memory_order_relaxed)) {
-    __imp__sub_8243E7D8(ctx, base);
+    __imp__sub_8243E800(ctx, base);
     return;
   }
   const uint64_t n = g_llamadas.load(std::memory_order_relaxed) + 1;
@@ -724,7 +724,7 @@ void Llamada(PPCContext& ctx, uint8_t* base) {
     return;
   }
   Sumar(g_originales, uint64_t(1));
-  __imp__sub_8243E7D8(ctx, base);
+  __imp__sub_8243E800(ctx, base);
 }
 
 void Informe() {
@@ -736,7 +736,7 @@ void Informe() {
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   const bool activo = REXCVAR_GET(nfsmw_visible_nativo);
   if (siguiente == 0) {
-    REXLOG_INFO("[visible] GetVisibleState (8243E7D8) {}",
+    REXLOG_INFO("[visible] GetVisibleState (8243E800) {}",
                 activo ? "en nativo (build 174): empieza comprobando contra la original"
                        : "por la original (nfsmw_visible_nativo = false)");
     return;
@@ -754,7 +754,7 @@ void Informe() {
 }  // namespace visible
 }  // namespace
 
-REX_HOOK_RAW(sub_8243E7D8) {  // eViewPlatInterface::GetVisibleState: native (see above)
+REX_HOOK_RAW(sub_8243E800) {  // eViewPlatInterface::GetVisibleState: native (see above)
   Medir(g_m_visible, [&] { visible::Llamada(ctx, base); });
   if ((g_m_visible.llamadas.load(std::memory_order_relaxed) & 4095) == 0) {
     InformeMedida();
@@ -762,27 +762,27 @@ REX_HOOK_RAW(sub_8243E7D8) {  // eViewPlatInterface::GetVisibleState: native (se
   }
 }
 
-REX_EXTERN(__imp__sub_824C2850);
+REX_EXTERN(__imp__sub_824C2878);
 // DrawAScenery is native (nfsmw_escenario_nativo.cpp, cvar nfsmw_escenario_nativo, with its guard).
 // The measurement stays here for comparison: the recompiled version took 0.83 us per call in a race.
 namespace nfsmw::escenario_nativo {
 void DrawAScenery(PPCContext& ctx, uint8_t* base);
 }
-REX_HOOK_RAW(sub_824C2850) {  // ScenerySectionHeader::DrawAScenery
+REX_HOOK_RAW(sub_824C2878) {  // ScenerySectionHeader::DrawAScenery
   Medir(g_m_draw, [&] { nfsmw::escenario_nativo::DrawAScenery(ctx, base); });
 }
 
-REX_EXTERN(__imp__sub_824C2F48);
-REX_HOOK_RAW(sub_824C2F48) {  // ScenerySectionHeader::TreeCull
+REX_EXTERN(__imp__sub_824C2F70);
+REX_HOOK_RAW(sub_824C2F70) {  // ScenerySectionHeader::TreeCull
   // Also its exact time, for the [tiron] juego log line (7,400 calls/s: two clock reads each). The 1-in-16
   // measurement of the [medida] line is unchanged.
   const int64_t inicio_ns = AhoraNs();
-  Medir(g_m_tree, [&] { __imp__sub_824C2F48(ctx, base); });
+  Medir(g_m_tree, [&] { __imp__sub_824C2F70(ctx, base); });
   nfsmw::esperas::Sumar(nfsmw::esperas::kPreparadorEscenario, uint64_t(AhoraNs() - inicio_ns));
 }
 
 // ---------------------------------------------------------------------------------------------------
-// sub_826992F0, the upload of effect parameters to the device, in native code.
+// sub_82699340, the upload of effect parameters to the device, in native code.
 //
 // WHAT IT DOES (read instruction by instruction)
 //   Two groups (the effect's and the shared one), each with 8 lists. For each 64-bit word of the
@@ -809,7 +809,7 @@ REX_HOOK_RAW(sub_824C2F48) {  // ScenerySectionHeader::TreeCull
 //   the counts.
 // ---------------------------------------------------------------------------------------------------
 REXCVAR_DEFINE_BOOL(nfsmw_d3d_efectos_nativo, true, "NFSMW",
-                    "Envio de parametros de efecto (sub_826992F0) en nativo: entero con "
+                    "Envio de parametros de efecto (sub_82699340) en nativo: entero con "
                     "nfsmw_d3d_efectos_nativo_todo (build 171); sin el, solo las constantes de coma flotante "
                     "y, con enteros, booleanos o texturas, la original. Se comprueba contra la original y se "
                     "apaga sola si difiere")
@@ -1048,10 +1048,10 @@ void InformeEfectos() {
 }
 }  // namespace
 
-REX_EXTERN(__imp__sub_826992F0);
+REX_EXTERN(__imp__sub_82699340);
 
 // ---------------------------------------------------------------------------------------------------
-// The whole of sub_826992F0 in native code (cvar nfsmw_d3d_efectos_nativo_todo).
+// The whole of sub_82699340 in native code (cvar nfsmw_d3d_efectos_nativo_todo).
 //
 // WHY
 //   53 % of its ~72,000 calls/s had something in lists 2-7 (integers, booleans or textures) and went
@@ -1071,7 +1071,7 @@ REX_EXTERN(__imp__sub_826992F0);
 //            2528 (or 2532) + register / 32, and sets the same bit 0x80000000 of +32.
 //   6 and 7  textures: the D3D SetTexture (8258_A648) with the pointer from the parameter's table. Its
 //            rare call, releasing the texture that leaves the slot when it runs out of uses
-//            (sub_82594C70), is left to the original, with the stack and registers it would have.
+//            (sub_82594CB8), is left to the original, with the stack and registers it would have.
 //   At the end, dcbzl of the effect's two dirty lines, as in the lists 0-1 path.
 //
 // WHY IT IS BIT-IDENTICAL
@@ -1110,14 +1110,14 @@ REX_EXTERN(__imp__sub_826992F0);
 #include <rex/ppc/intrinsics.h>
 
 REXCVAR_DEFINE_BOOL(nfsmw_d3d_efectos_nativo_todo, true, "NFSMW",
-                    "sub_826992F0 ENTERA en nativo (build 171): tambien las constantes enteras y booleanas y "
+                    "sub_82699340 ENTERA en nativo (build 171): tambien las constantes enteras y booleanas y "
                     "las texturas (SetTexture). Se comprueba contra la original (las primeras 512 llamadas y "
                     "despues 1 de cada 4096) y se apaga sola si difiere; false = como la build 154 (solo las "
                     "constantes de coma flotante). Necesita nfsmw_d3d_efectos_nativo")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DECLARE(bool, nfsmw_d3d_trace);
 
-REX_EXTERN(__imp__sub_82594C70);
+REX_EXTERN(__imp__sub_82594CB8);
 
 namespace {
 
@@ -1493,8 +1493,8 @@ bool SetTextureNativo(Todo<M>& c, uint32_t hueco, uint32_t textura) {
     Escribir32(base, c.pila - 448 - 128, c.pila - 448);  // stwu r1,-128(r1) de SetTexture
     ctx.r1.u32 = c.pila - 448 - 128;
     ctx.r3.u64 = anterior;
-    ctx.lr = 0x8258A7C4;                                 // the instruction after its bl
-    __imp__sub_82594C70(ctx, base);
+    ctx.lr = 0x8258A80C;                                 // the instruction after its bl
+    __imp__sub_82594CB8(ctx, base);
     ctx.r1.u64 = r1;
     c.r3 = ctx.r3.u64;
     return true;
@@ -1564,7 +1564,7 @@ bool RecorrerGrupo(Todo<M>& c, const GrupoTodo& g) {
          Lista<5>(c, g) && Lista<6>(c, g) && Lista<7>(c, g);
 }
 
-// The whole of sub_826992F0. With MemoriaDirecta it never returns false.
+// The whole of sub_82699340. With MemoriaDirecta it never returns false.
 template <typename M>
 bool EfectosTodo(Todo<M>& c) {
   M& m = c.m;
@@ -1651,7 +1651,7 @@ void EfectosTodoLlamada(PPCContext& ctx, uint8_t* base) {
     // the next one is checked.
     Sumar(c.m.Llena() ? g_todo.llenas : g_todo.abandonadas, uint64_t(1));
     g_todo_pendiente.store(true, std::memory_order_relaxed);
-    __imp__sub_826992F0(ctx, base);
+    __imp__sub_82699340(ctx, base);
     return;
   }
   const uint32_t dispositivo = c.dispositivo;
@@ -1664,7 +1664,7 @@ void EfectosTodoLlamada(PPCContext& ctx, uint8_t* base) {
   }
   const uint32_t csr_antes = ctx.fpscr.csr;
   const uint64_t r1_antes = ctx.r1.u64;
-  __imp__sub_826992F0(ctx, base);
+  __imp__sub_82699340(ctx, base);
   ContarTodo(c);
 
   const MemoriaCapa& capa = c.m;
@@ -1726,7 +1726,7 @@ void EfectosLlamada(PPCContext& ctx, uint8_t* base) {
   static const bool activo = REXCVAR_GET(nfsmw_d3d_efectos_nativo);
   static const bool todo = TodoActivo();
   if (!activo || g_efectos_apagado.load(std::memory_order_relaxed)) {
-    __imp__sub_826992F0(ctx, base);
+    __imp__sub_82699340(ctx, base);
     return;
   }
   // The whole function in native code, with its guard. If that guard turns it off after a difference, the
@@ -1746,7 +1746,7 @@ void EfectosLlamada(PPCContext& ctx, uint8_t* base) {
       return;  // r3 is still this, as in the original without calls
     }
     Sumar(g_efectos_originales, uint64_t(1));
-    __imp__sub_826992F0(ctx, base);
+    __imp__sub_82699340(ctx, base);
     return;
   }
 
@@ -1756,7 +1756,7 @@ void EfectosLlamada(PPCContext& ctx, uint8_t* base) {
   Escritor w{base, &registro};
   if (!EfectosNativo(w, self, vectores)) {
     Sumar(g_efectos_originales, uint64_t(1));
-    __imp__sub_826992F0(ctx, base);
+    __imp__sub_82699340(ctx, base);
     return;
   }
   std::vector<uint8_t> nativo;  // what the native version left at each recorded write
@@ -1767,7 +1767,7 @@ void EfectosLlamada(PPCContext& ctx, uint8_t* base) {
   for (auto it = registro.rbegin(); it != registro.rend(); ++it) {  // undo, from last to first
     std::memcpy(Puntero(base, it->direccion), it->antes, it->bytes);
   }
-  __imp__sub_826992F0(ctx, base);
+  __imp__sub_82699340(ctx, base);
   size_t desplazamiento = 0;
   bool igual = true;
   uint32_t direccion_mala = 0;
@@ -1796,7 +1796,7 @@ void EfectosLlamada(PPCContext& ctx, uint8_t* base) {
 }
 }  // namespace
 
-REX_HOOK_RAW(sub_826992F0) {  // upload of effect parameters to the device
+REX_HOOK_RAW(sub_82699340) {  // upload of effect parameters to the device
   Medir(g_m_efecto, [&] { EfectosLlamada(ctx, base); });
   if ((g_m_efecto.llamadas.load(std::memory_order_relaxed) & 4095) == 0) {
     InformeEfectos();
@@ -1807,8 +1807,8 @@ REX_HOOK_RAW(sub_826992F0) {  // upload of effect parameters to the device
 // Phase 2 of the Direct3D-level renderer: the composite FlushState marker. See docs/native-renderer.md.
 //
 // WHAT CHANGES
-//   On every draw, FlushState (825A40C0) dumps the dirty registers of the device mirror with sub_825A2AA0
-//   (groups 0x2000-0x2380 and booleans), sub_825A2C58 (VS and PS constants) and sub_825A2B60 (fetch):
+//   On every draw, FlushState (825A4108) dumps the dirty registers of the device mirror with sub_825A2AE8
+//   (groups 0x2000-0x2380 and booleans), sub_825A2CA0 (VS and PS constants) and sub_825A2BA8 (fetch):
 //   ~7 type-0 packets and ~6 padding words (type 2) per draw, measured. The PM4 ring thread, at 95 % load,
 //   decodes each packet separately: ~2 us per draw on registers alone.
 //   With this, FlushState writes a single type-3 NOP packet with all the runs inside (format: kMarcadorMagia
@@ -1816,7 +1816,7 @@ REX_HOOK_RAW(sub_826992F0) {  // upload of effect parameters to the device
 //   to the IM_LOADs, draws, resolves, fences and the Swap is the same. The data travels inside the ring and
 //   not in a separate queue: that way, when the D3D replays a recorded buffer (BeginTiling/EndTiling), the
 //   marker is applied again just as the type-0 packets would be, and the pace at which the game notifies
-//   the ring does not change. 825A2D80 (streams) and 825A3AF0 (shaders, IM_LOAD) are still called as they
+//   the ring does not change. 825A2DC8 (streams) and 825A3B38 (shaders, IM_LOAD) are still called as they
 //   are, in the same order.
 //
 // SELF-CHECKING GUARD
@@ -1830,7 +1830,7 @@ REX_HOOK_RAW(sub_826992F0) {  // upload of effect parameters to the device
 //   that carry a group not yet checked kMinimoPorGrupo times, go through the check path again. A single
 //   difference on either side turns it off for the rest of the session ("[d3d_marcador] DIFERENCIA" in the
 //   log). If the marker does not fit in the space the D3D has reserved ([dev+0] to [dev+4]), the game's
-//   dumps run instead, since they know how to request space (sub_825A29E8).
+//   dumps run instead, since they know how to request space (sub_825A2A30).
 // ---------------------------------------------------------------------------------------------------
 REXCVAR_DEFINE_BOOL(nfsmw_d3d_marcador, true, "NFSMW",
                     "Renderizador nativo (25/09, build 170, fase 2 del renderizador a nivel de Direct3D): FlushState "
@@ -1839,11 +1839,11 @@ REXCVAR_DEFINE_BOOL(nfsmw_d3d_marcador, true, "NFSMW",
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DECLARE(bool, nfsmw_nativo_sombra_d3d);
 
-REX_EXTERN(__imp__sub_825A2D80);  // streams: writes the vertex fetches to the mirror
-REX_EXTERN(__imp__sub_825A3AF0);  // shaders: IM_LOAD to the ring
-REX_EXTERN(__imp__sub_825A2C58);  // dump of the VS and PS constants
-REX_EXTERN(__imp__sub_825A2B60);  // dump of the fetches
-REX_EXTERN(__imp__sub_825A29E8);  // ring-full path of the three dumps
+REX_EXTERN(__imp__sub_825A2DC8);  // streams: writes the vertex fetches to the mirror
+REX_EXTERN(__imp__sub_825A3B38);  // shaders: IM_LOAD to the ring
+REX_EXTERN(__imp__sub_825A2CA0);  // dump of the VS and PS constants
+REX_EXTERN(__imp__sub_825A2BA8);  // dump of the fetches
+REX_EXTERN(__imp__sub_825A2A30);  // ring-full path of the three dumps
 
 namespace {
 namespace marcador {
@@ -1862,7 +1862,7 @@ constexpr uint64_t kComprobacionesJuego = 20000;
 constexpr uint64_t kComprobacionesAnillo = 20000;
 constexpr uint32_t kMinimoPorGrupo = 64;
 constexpr uint64_t kComprobarCada = 1024;  // potencia de 2
-constexpr uint32_t kRelleno = 0x80000000u;  // type-2 packet 825A2C58 and 825A2B60 use to align their data
+constexpr uint32_t kRelleno = 0x80000000u;  // type-2 packet 825A2CA0 and 825A2BA8 use to align their data
 
 struct Tramo {
   uint32_t registro;  // primer registro
@@ -1897,7 +1897,7 @@ std::atomic<uint32_t> g_comprobados_grupo[kGrupos];
 std::atomic<uint32_t> g_grupos_listos{0};  // bit g: group g was already checked kMinimoPorGrupo times
 std::atomic<uint32_t> g_secuencia{0};
 std::atomic<uint64_t> g_turno{0};
-std::atomic<uint64_t> g_anillo_lleno{0};  // calls to sub_825A29E8 (ring full during a dump)
+std::atomic<uint64_t> g_anillo_lleno{0};  // calls to sub_825A2A30 (ring full during a dump)
 // Report every 10 s.
 std::atomic<uint64_t> g_i_llamadas{0};
 std::atomic<uint64_t> g_i_con_registros{0};
@@ -2144,55 +2144,55 @@ inline void Argumentos(PPCContext& ctx, uint32_t dev, uint64_t mascara, uint32_t
   ctx.lr = vuelta;
 }
 
-// The end of FlushState as is (from loc_825A4110): the game's dumps, in their order, with their arguments,
+// The end of FlushState as is (from loc_825A4158): the game's dumps, in their order, with their arguments,
 // their return addresses and the masks zeroed after each group.
 void VolcarComoElJuego(PPCContext& ctx, uint8_t* base, Marco& marco, uint32_t dev, bool con_30) {
   if (con_30) {
     uint64_t m = Leer64(base, dev + 0x30);
     if (const uint64_t r4 = m & 0xFFFFFFFFFC000000ull) {
       marco.Abrir();
-      Argumentos(ctx, dev, r4, 0x2300, dev + 0x2DF8, 0x825A4130);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, r4, 0x2300, dev + 0x2DF8, 0x825A4178);
+      sub_825A2AE8(ctx, base);
     }
     m = Leer64(base, dev + 0x30);
     if (uint32_t(m) & 0x03FC0000u) {
       marco.Abrir();
-      Argumentos(ctx, dev, (m << 38) & 0xFF00000000000000ull, 0x2380, dev + 0x2E90, 0x825A4154);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, (m << 38) & 0xFF00000000000000ull, 0x2380, dev + 0x2E90, 0x825A419C);
+      sub_825A2AE8(ctx, base);
     }
     Escribir64(base, dev + 0x30, 0);
   }
   if (const uint64_t m = Leer64(base, dev + 0x10)) {
     marco.Abrir();
-    Argumentos(ctx, dev, m, 0x4000, dev + 0x780, 0x825A4178);
-    __imp__sub_825A2C58(ctx, base);
+    Argumentos(ctx, dev, m, 0x4000, dev + 0x780, 0x825A41C0);
+    __imp__sub_825A2CA0(ctx, base);
     Escribir64(base, dev + 0x10, 0);
   }
   if (const uint64_t m = Leer64(base, dev + 0x18)) {
     marco.Abrir();
-    Argumentos(ctx, dev, m, 0x4400, dev + 0x1780, 0x825A419C);
-    __imp__sub_825A2C58(ctx, base);
+    Argumentos(ctx, dev, m, 0x4400, dev + 0x1780, 0x825A41E4);
+    __imp__sub_825A2CA0(ctx, base);
     Escribir64(base, dev + 0x18, 0);
   }
   if (Leer64(base, dev + 0x20) != 0) {
     uint64_t m = Leer64(base, dev + 0x20);
     if (const uint64_t r4 = m & 0xFFFFFFFF00000000ull) {
       marco.Abrir();
-      Argumentos(ctx, dev, r4, 0x4800, dev + 0x480, 0x825A41C8);
-      __imp__sub_825A2B60(ctx, base);
+      Argumentos(ctx, dev, r4, 0x4800, dev + 0x480, 0x825A4210);
+      __imp__sub_825A2BA8(ctx, base);
     }
     m = Leer64(base, dev + 0x20);
     if (uint32_t(m) & 0x80000000u) {
       marco.Abrir();
       Escribir64(base, dev + 0x2CB0, 0xFFFFFFFFFF000000ull);
-      Argumentos(ctx, dev, 0xFFFFFFFFFF000000ull, 0x4900, dev + 0x2780, 0x825A41F4);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, 0xFFFFFFFFFF000000ull, 0x4900, dev + 0x2780, 0x825A423C);
+      sub_825A2AE8(ctx, base);
     }
     m = Leer64(base, dev + 0x20);
     if (uint32_t(m) & 0x3FFFC000u) {
       marco.Abrir();
-      Argumentos(ctx, dev, (m << 34) & 0xFFFF000000000000ull, 0x2000, dev + 0x2CC0, 0x825A4218);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, (m << 34) & 0xFFFF000000000000ull, 0x2000, dev + 0x2CC0, 0x825A4260);
+      sub_825A2AE8(ctx, base);
     }
     Escribir64(base, dev + 0x20, 0);
   }
@@ -2200,26 +2200,26 @@ void VolcarComoElJuego(PPCContext& ctx, uint8_t* base, Marco& marco, uint32_t de
     uint64_t m = Leer64(base, dev + 0x28);
     if (const uint64_t r4 = m & 0xFFFFF80000000000ull) {
       marco.Abrir();
-      Argumentos(ctx, dev, r4, 0x2100, dev + 0x2D0C, 0x825A4244);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, r4, 0x2100, dev + 0x2D0C, 0x825A428C);
+      sub_825A2AE8(ctx, base);
     }
     m = Leer64(base, dev + 0x28);
     if (m & 0x000007C000000000ull) {
       marco.Abrir();
-      Argumentos(ctx, dev, (m << 21) & 0xF800000000000000ull, 0x2180, dev + 0x2D60, 0x825A4270);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, (m << 21) & 0xF800000000000000ull, 0x2180, dev + 0x2D60, 0x825A42B8);
+      sub_825A2AE8(ctx, base);
     }
     m = Leer64(base, dev + 0x28);
     if (m & 0x0000003FFC000000ull) {
       marco.Abrir();
-      Argumentos(ctx, dev, (m << 26) & 0xFFF0000000000000ull, 0x2200, dev + 0x2D74, 0x825A429C);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, (m << 26) & 0xFFF0000000000000ull, 0x2200, dev + 0x2D74, 0x825A42E4);
+      sub_825A2AE8(ctx, base);
     }
     m = Leer64(base, dev + 0x28);
     if (uint32_t(m) & 0x03FFFFE0u) {
       marco.Abrir();
-      Argumentos(ctx, dev, (m << 38) & 0xFFFFF80000000000ull, 0x2280, dev + 0x2DA4, 0x825A42C0);
-      sub_825A2AA0(ctx, base);
+      Argumentos(ctx, dev, (m << 38) & 0xFFFFF80000000000ull, 0x2280, dev + 0x2DA4, 0x825A4308);
+      sub_825A2AE8(ctx, base);
     }
     Escribir64(base, dev + 0x28, 0);
   }
@@ -2362,9 +2362,9 @@ void AnotarComprobacionMarcador(bool igual, uint32_t secuencia, uint32_t registr
 
 // Ring-full path of the dumps: nothing changes, it is only counted. With the ring full, a dump's packets
 // end up split between two stretches of the ring and the watching phase cannot compare them.
-REX_HOOK_RAW(sub_825A29E8) {
+REX_HOOK_RAW(sub_825A2A30) {
   Sumar(marcador::g_anillo_lleno, uint64_t(1));
-  __imp__sub_825A29E8(ctx, base);
+  __imp__sub_825A2A30(ctx, base);
 }
 
 // From the FlushState hook (nfsmw_d3d_trace.cpp). false = nothing touched: let the original run.
@@ -2400,14 +2400,14 @@ bool NfsmwFlushStateMarcador(PPCContext& ctx, uint8_t* base) {
     if (m30 & 0x400) {
       marco.Abrir();
       ctx.r3.u64 = dev;
-      ctx.lr = 0x825A40F8;
-      __imp__sub_825A2D80(ctx, base);
+      ctx.lr = 0x825A4140;
+      __imp__sub_825A2DC8(ctx, base);
     }
     if (Leer64(base, dev + 0x30) & 0x1E0) {
       marco.Abrir();
       ctx.r3.u64 = dev;
-      ctx.lr = 0x825A4110;
-      __imp__sub_825A3AF0(ctx, base);
+      ctx.lr = 0x825A4158;
+      __imp__sub_825A3B38(ctx, base);
     }
   }
   // 2. The runs of all the dumps, with the masks left by streams and shaders.
@@ -2426,7 +2426,7 @@ bool NfsmwFlushStateMarcador(PPCContext& ctx, uint8_t* base) {
     dibujo_en_marcador = modo_dibujo != 0;
     LimpiarComoFlushState(base, dev, m30 != 0, v);
     static const bool sombra = REXCVAR_GET(nfsmw_nativo_sombra_d3d);
-    if (sombra) {  // what the 825A2AA0 hook would do per group (phase 1, as a shadow)
+    if (sombra) {  // what the 825A2AE8 hook would do per group (phase 1, as a shadow)
       for (uint32_t g = 0; g < kGrupos; ++g) {
         if ((v.grupos >> g) & 1) {
           nfsmw::nativo::AprenderGrupoEspejo(v.registro_base[g], v.mascara[g], v.origen_base[g] - dev);

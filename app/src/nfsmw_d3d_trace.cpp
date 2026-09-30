@@ -56,7 +56,7 @@
 
 REXCVAR_DEFINE_BOOL(nfsmw_nativo_gotas_lluvia, true, "NFSMW",
                     "Renderizador nativo (25/09, build 174): anotar los dibujos que el juego hace con la rutina "
-                    "interna del D3D sub_825932D8 (las gotas de lluvia en la pantalla y el cuadrilatero del "
+                    "interna del D3D sub_82593320 (las gotas de lluvia en la pantalla y el cuadrilatero del "
                     "VisualTreatment). Sin esto las gotas no salen. false = como antes")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
@@ -141,40 +141,40 @@ struct FnInfo {
 
 // The order must match the enum.
 constexpr FnInfo kFns[kFnCount] = {
-    {"CreateDevice", 0x825A1658},
-    {"Swap", 0x825989D8},
-    {"SyncToPresentationInterval", 0x82598868},
-    {"PresentComposite", 0x82598FC8},
-    {"SetRingBufferParameters", 0x825981E8},
-    {"Clear", 0x8259A450},
-    {"ClearF", 0x8259A500},
-    {"Resolve", 0x82592538},
-    {"BeginTiling", 0x825992F0},
-    {"EndTiling", 0x82599680},
-    {"SetRenderTarget", 0x8258DB18},
-    {"SetDepthStencilSurface", 0x8258DE80},
-    {"CreateTexture", 0x8258A0A0},
-    {"CreateSurface", 0x8258A1C0},
-    {"SetTexture", 0x8258A648},
-    {"CreateVertexBuffer", 0x82595570},
-    {"LockVertexBuffer", 0x82595620},
-    {"CreateIndexBuffer", 0x825956D0},
-    {"LockIndexBuffer", 0x82595780},
-    {"Unlock", 0x82595170},
-    {"Release", 0x825953D8},
-    {"SetStreamSource", 0x8258D968},
-    {"SetIndices", 0x8258DA60},
-    {"CreateVertexDeclaration", 0x8259C470},
-    {"SetVertexDeclaration", 0x8259C3D0},
-    {"SetVertexShader", 0x8259C2A8},
-    {"SetPixelShader", 0x8259BDC0},
-    {"DrawVertices", 0x82593A10},
-    {"DrawIndexedVertices", 0x82593C50},
-    {"DrawVerticesUP", 0x82593588},
-    {"DrawIndexedVerticesUP", 0x82593940},
-    {"FlushState", 0x825A40C0},
-    {"SetGammaRamp", 0x8258E138},
-    {"QueryBufferSpace", 0x82597DA0},
+    {"CreateDevice", 0x825A16A0},
+    {"Swap", 0x82598A20},
+    {"SyncToPresentationInterval", 0x825988B0},
+    {"PresentComposite", 0x82599010},
+    {"SetRingBufferParameters", 0x82598230},
+    {"Clear", 0x8259A498},
+    {"ClearF", 0x8259A548},
+    {"Resolve", 0x82592580},
+    {"BeginTiling", 0x82599338},
+    {"EndTiling", 0x825996C8},
+    {"SetRenderTarget", 0x8258DB60},
+    {"SetDepthStencilSurface", 0x8258DEC8},
+    {"CreateTexture", 0x8258A0E8},
+    {"CreateSurface", 0x8258A208},
+    {"SetTexture", 0x8258A690},
+    {"CreateVertexBuffer", 0x825955B8},
+    {"LockVertexBuffer", 0x82595668},
+    {"CreateIndexBuffer", 0x82595718},
+    {"LockIndexBuffer", 0x825957C8},
+    {"Unlock", 0x825951B8},
+    {"Release", 0x82595420},
+    {"SetStreamSource", 0x8258D9B0},
+    {"SetIndices", 0x8258DAA8},
+    {"CreateVertexDeclaration", 0x8259C4B8},
+    {"SetVertexDeclaration", 0x8259C418},
+    {"SetVertexShader", 0x8259C2F0},
+    {"SetPixelShader", 0x8259BE08},
+    {"DrawVertices", 0x82593A58},
+    {"DrawIndexedVertices", 0x82593C98},
+    {"DrawVerticesUP", 0x825935D0},
+    {"DrawIndexedVerticesUP", 0x82593988},
+    {"FlushState", 0x825A4108},
+    {"SetGammaRamp", 0x8258E180},
+    {"QueryBufferSpace", 0x82597DE8},
 };
 
 struct Detail {
@@ -422,7 +422,7 @@ void NotificarVideo(uint32_t fn, const Ctx& ctx, const uint8_t* base, uint16_t v
   }
 #if defined(NFSMW_NATIVE_SHADER_LIBRARY)
   if (fn == kDrawVertices || fn == kDrawIndexedVertices || fn == kDrawVerticesUP || fn == kDrawIndexedVerticesUP)
-    nfsmw::native::AnotarDibujoVideo(base, fn == kDrawVertices && ctx.lr == 0x826DB87C, ctx.r31.u32);
+    nfsmw::native::AnotarDibujoVideo(base, fn == kDrawVertices && ctx.lr == 0x826DB8CC, ctx.r31.u32);
   else if (fn == kClear || fn == kClearF) nfsmw::native::InvalidarVideo();
 #else
   (void)fn; (void)ctx; (void)base;
@@ -572,29 +572,29 @@ void CaptureDevice(const uint8_t* base) {
     }                                                                  \
   }
 
-NFSMW_TRACE(82598868, nfsmw::d3d_trace::kSyncPresentInterval)
-NFSMW_TRACE(82598FC8, nfsmw::d3d_trace::kPresentComposite)
-NFSMW_TRACE(825981E8, nfsmw::d3d_trace::kRingBufferParams)
-NFSMW_TRACE(8259A450, nfsmw::d3d_trace::kClear)
-NFSMW_TRACE(8259A500, nfsmw::d3d_trace::kClearF)
-NFSMW_TRACE(82592538, nfsmw::d3d_trace::kResolve)
-NFSMW_TRACE(825992F0, nfsmw::d3d_trace::kBeginTiling)
-NFSMW_TRACE(82599680, nfsmw::d3d_trace::kEndTiling)
-NFSMW_TRACE(8258DB18, nfsmw::d3d_trace::kSetRenderTarget)
-NFSMW_TRACE(8258DE80, nfsmw::d3d_trace::kSetDepthStencilSurface)
-NFSMW_TRACE(8258A0A0, nfsmw::d3d_trace::kCreateTexture)
-NFSMW_TRACE(8258A1C0, nfsmw::d3d_trace::kCreateSurface)
-NFSMW_TRACE(8258A648, nfsmw::d3d_trace::kSetTexture)
-NFSMW_TRACE(82595570, nfsmw::d3d_trace::kCreateVertexBuffer)
-NFSMW_TRACE(82595620, nfsmw::d3d_trace::kLockVertexBuffer)
-NFSMW_TRACE(825956D0, nfsmw::d3d_trace::kCreateIndexBuffer)
-NFSMW_TRACE(82595780, nfsmw::d3d_trace::kLockIndexBuffer)
-NFSMW_TRACE(82595170, nfsmw::d3d_trace::kUnlock)
-NFSMW_TRACE(825953D8, nfsmw::d3d_trace::kRelease)
-NFSMW_TRACE(8258D968, nfsmw::d3d_trace::kSetStreamSource)
-NFSMW_TRACE(8258DA60, nfsmw::d3d_trace::kSetIndices)
-NFSMW_TRACE(8259C470, nfsmw::d3d_trace::kCreateVertexDeclaration)
-NFSMW_TRACE(8259C3D0, nfsmw::d3d_trace::kSetVertexDeclaration)
+NFSMW_TRACE(825988B0, nfsmw::d3d_trace::kSyncPresentInterval)
+NFSMW_TRACE(82599010, nfsmw::d3d_trace::kPresentComposite)
+NFSMW_TRACE(82598230, nfsmw::d3d_trace::kRingBufferParams)
+NFSMW_TRACE(8259A498, nfsmw::d3d_trace::kClear)
+NFSMW_TRACE(8259A548, nfsmw::d3d_trace::kClearF)
+NFSMW_TRACE(82592580, nfsmw::d3d_trace::kResolve)
+NFSMW_TRACE(82599338, nfsmw::d3d_trace::kBeginTiling)
+NFSMW_TRACE(825996C8, nfsmw::d3d_trace::kEndTiling)
+NFSMW_TRACE(8258DB60, nfsmw::d3d_trace::kSetRenderTarget)
+NFSMW_TRACE(8258DEC8, nfsmw::d3d_trace::kSetDepthStencilSurface)
+NFSMW_TRACE(8258A0E8, nfsmw::d3d_trace::kCreateTexture)
+NFSMW_TRACE(8258A208, nfsmw::d3d_trace::kCreateSurface)
+NFSMW_TRACE(8258A690, nfsmw::d3d_trace::kSetTexture)
+NFSMW_TRACE(825955B8, nfsmw::d3d_trace::kCreateVertexBuffer)
+NFSMW_TRACE(82595668, nfsmw::d3d_trace::kLockVertexBuffer)
+NFSMW_TRACE(82595718, nfsmw::d3d_trace::kCreateIndexBuffer)
+NFSMW_TRACE(825957C8, nfsmw::d3d_trace::kLockIndexBuffer)
+NFSMW_TRACE(825951B8, nfsmw::d3d_trace::kUnlock)
+NFSMW_TRACE(82595420, nfsmw::d3d_trace::kRelease)
+NFSMW_TRACE(8258D9B0, nfsmw::d3d_trace::kSetStreamSource)
+NFSMW_TRACE(8258DAA8, nfsmw::d3d_trace::kSetIndices)
+NFSMW_TRACE(8259C4B8, nfsmw::d3d_trace::kCreateVertexDeclaration)
+NFSMW_TRACE(8259C418, nfsmw::d3d_trace::kSetVertexDeclaration)
 // Phase 2b of the Direct3D-level renderer: the four Draw* open the draw window before the original
 // (AnotarDibujo, in NotificarVideo) and close it afterwards (TerminarDibujo). Their FlushState, which runs
 // inside (all four always call it, as seen in the recompiled code), takes the record to the marker; if it
@@ -627,30 +627,30 @@ void GanchoDibujo(uint32_t id, Ctx& ctx, uint8_t* base, Original original) {
     Leave(id, ctx);
   }
 }
-REX_EXTERN(__imp__sub_82593A10);
-REX_HOOK_RAW(sub_82593A10) {  // DrawVertices
-  GanchoDibujo(nfsmw::d3d_trace::kDrawVertices, ctx, base, [](auto& c, uint8_t* b) { __imp__sub_82593A10(c, b); });
+REX_EXTERN(__imp__sub_82593A58);
+REX_HOOK_RAW(sub_82593A58) {  // DrawVertices
+  GanchoDibujo(nfsmw::d3d_trace::kDrawVertices, ctx, base, [](auto& c, uint8_t* b) { __imp__sub_82593A58(c, b); });
 }
-REX_EXTERN(__imp__sub_82593C50);
-REX_HOOK_RAW(sub_82593C50) {  // DrawIndexedVertices
+REX_EXTERN(__imp__sub_82593C98);
+REX_HOOK_RAW(sub_82593C98) {  // DrawIndexedVertices
   GanchoDibujo(nfsmw::d3d_trace::kDrawIndexedVertices, ctx, base,
-               [](auto& c, uint8_t* b) { __imp__sub_82593C50(c, b); });
+               [](auto& c, uint8_t* b) { __imp__sub_82593C98(c, b); });
 }
-REX_EXTERN(__imp__sub_82593588);
-REX_HOOK_RAW(sub_82593588) {  // DrawVerticesUP
-  GanchoDibujo(nfsmw::d3d_trace::kDrawVerticesUP, ctx, base, [](auto& c, uint8_t* b) { __imp__sub_82593588(c, b); });
+REX_EXTERN(__imp__sub_825935D0);
+REX_HOOK_RAW(sub_825935D0) {  // DrawVerticesUP
+  GanchoDibujo(nfsmw::d3d_trace::kDrawVerticesUP, ctx, base, [](auto& c, uint8_t* b) { __imp__sub_825935D0(c, b); });
 }
-REX_EXTERN(__imp__sub_82593940);
-REX_HOOK_RAW(sub_82593940) {  // DrawIndexedVerticesUP
+REX_EXTERN(__imp__sub_82593988);
+REX_HOOK_RAW(sub_82593988) {  // DrawIndexedVerticesUP
   GanchoDibujo(nfsmw::d3d_trace::kDrawIndexedVerticesUP, ctx, base,
-               [](auto& c, uint8_t* b) { __imp__sub_82593940(c, b); });
+               [](auto& c, uint8_t* b) { __imp__sub_82593988(c, b); });
 }
 // FlushState goes through the composite marker first (phase 2 of the Direct3D-level renderer, at the end
 // of nfsmw_d3d_registros_nativo.cpp). If that path declines it (off, or without the native renderer), the
 // original runs. NotificarVideo does nothing with FlushState, so it is not called.
 bool NfsmwFlushStateMarcador(PPCContext& ctx, uint8_t* base);
-REX_EXTERN(__imp__sub_825A40C0);
-REX_HOOK_RAW(sub_825A40C0) {  // FlushState
+REX_EXTERN(__imp__sub_825A4108);
+REX_HOOK_RAW(sub_825A4108) {  // FlushState
   using namespace nfsmw::d3d_trace;
   StartOnce();
   const bool on = g_enabled.load(std::memory_order_relaxed);
@@ -658,7 +658,7 @@ REX_HOOK_RAW(sub_825A40C0) {  // FlushState
     Enter(kFlushState, ctx);
   }
   if (!NfsmwFlushStateMarcador(ctx, base)) {
-    __imp__sub_825A40C0(ctx, base);
+    __imp__sub_825A4108(ctx, base);
   }
   if (on) {
     Leave(kFlushState, ctx);
@@ -669,60 +669,60 @@ REX_HOOK_RAW(sub_825A40C0) {  // FlushState
  *
  * On the Xbox 360, in the rain (the exit of the forest circuit), round drops that refract the image are
  * visible on the screen; here they did not show up. The game draws them in the final composition
- * (sub_82442478 -> sub_82448168 -> sub_8245C8D8, technique "onscreen_distort", PS p_000103 and VS
- * v_000098) by calling the D3D internal routine sub_825932D8 directly (it reserves space in the ring for a
+ * (sub_824424A0 -> sub_82448190 -> sub_8245C900, technique "onscreen_distort", PS p_000103 and VS
+ * v_000098) by calling the D3D internal routine sub_82593320 directly (it reserves space in the ring for a
  * draw with user vertices and returns where to copy them), without going through DrawVerticesUP. So no
  * Draw* record arrived and the PM4 ring had to deduce the shaders from what was loaded: the drops' VS is
  * not recognized (the D3D changes the swizzle of its fetches) and, without a VS, the draw was silently
  * discarded. The VisualTreatment quad (sub_82224458) uses the same shortcut; that one did show because its
  * VS is recognized.
  *
- * sub_825932D8(r3 device, r4 type, r5 vertex count, r6 stride): type and count are in the same registers
+ * sub_82593320(r3 device, r4 type, r5 vertex count, r6 stride): type and count are in the same registers
  * as in DrawVerticesUP, which is all the ring uses from a kVerticesUP record (EmparejarDibujo and
- * CuentaDelRegistro). The call DrawVerticesUP makes internally (return address 0x825935D8) is already
+ * CuentaDelRegistro). The call DrawVerticesUP makes internally (return address 0x82593620) is already
  * recorded: it is skipped.
  */
-REX_EXTERN(__imp__sub_825932D8);
-REX_HOOK_RAW(sub_825932D8) {
+REX_EXTERN(__imp__sub_82593320);
+REX_HOOK_RAW(sub_82593320) {
   static const bool gotas = REXCVAR_GET(nfsmw_nativo_gotas_lluvia);
-  const bool anotado = gotas && uint32_t(ctx.lr) != 0x825935D8u;
+  const bool anotado = gotas && uint32_t(ctx.lr) != 0x82593620u;
   if (anotado) {
     nfsmw::nativo::AnotarDibujo(nfsmw::nativo::FuncionDibujo::kVerticesUP, base, ctx.r3.u32, ctx.r4.u32, ctx.r5.u32,
                                 ctx.r6.u32, ctx.r7.u32);
   }
-  __imp__sub_825932D8(ctx, base);
+  __imp__sub_82593320(ctx, base);
   if (anotado) {
     nfsmw::nativo::TerminarDibujo();  // phase 2b: if its FlushState did not take the record
   }
 }
 
-NFSMW_TRACE(8258E138, nfsmw::d3d_trace::kSetGammaRamp)
-NFSMW_TRACE(82597DA0, nfsmw::d3d_trace::kQueryBufferSpace)
+NFSMW_TRACE(8258E180, nfsmw::d3d_trace::kSetGammaRamp)
+NFSMW_TRACE(82597DE8, nfsmw::d3d_trace::kQueryBufferSpace)
 
 /*
- * IDirect3DQuery9::Issue (8258F810; r3 the query, r4 the flags: 2 = BEGIN, 1 = END). The vegetation
+ * IDirect3DQuery9::Issue (8258F858; r3 the query, r4 the flags: 2 = BEGIN, 1 = END). The vegetation
  * filtered in the game (nfsmw_d3d_vegetacion_juego) skips nothing while an occlusion query is open: there
  * the PM4 ring takes the long path. The original is always called and no PPC register is touched. Its
- * calls already go through sub_8258F810: the address appears in the sources, so tools/llamadas_directas.py
+ * calls already go through sub_8258F858: the address appears in the sources, so tools/llamadas_directas.py
  * does not change them.
  */
-REX_EXTERN(__imp__sub_8258F810);
-REX_HOOK_RAW(sub_8258F810) {
+REX_EXTERN(__imp__sub_8258F858);
+REX_HOOK_RAW(sub_8258F858) {
   nfsmw::nativo::AnotarConsultaD3D(base, ctx.r3.u32, ctx.r4.u32);
-  __imp__sub_8258F810(ctx, base);
+  __imp__sub_8258F858(ctx, base);
 }
 
 // The next four do more than count.
 
-REX_EXTERN(__imp__sub_825A1658);
-REX_HOOK_RAW(sub_825A1658) {  // CreateDevice: afterwards there is a device to look at
+REX_EXTERN(__imp__sub_825A16A0);
+REX_HOOK_RAW(sub_825A16A0) {  // CreateDevice: afterwards there is a device to look at
   using namespace nfsmw::d3d_trace;
   StartOnce();
   const bool on = g_enabled.load(std::memory_order_relaxed);
   if (on) {
     Enter(kCreateDevice, ctx);
   }
-  __imp__sub_825A1658(ctx, base);
+  __imp__sub_825A16A0(ctx, base);
   if (on) {
     Leave(kCreateDevice, ctx);
     CaptureDevice(base);
@@ -734,8 +734,8 @@ REX_HOOK_RAW(sub_825A1658) {  // CreateDevice: afterwards there is a device to l
 // F3 overlay FPS counter (MuestreaFotograma in nfsmw_app.h).
 std::atomic<uint64_t> g_nfsmw_fotogramas_juego{0};
 
-REX_EXTERN(__imp__sub_825989D8);
-REX_HOOK_RAW(sub_825989D8) {  // Swap: marks the end of each frame
+REX_EXTERN(__imp__sub_82598A20);
+REX_HOOK_RAW(sub_82598A20) {  // Swap: marks the end of each frame
 #if defined(NFSMW_NATIVE_SHADER_LIBRARY)
   nfsmw::native::AnotarSwapVideo();
 #endif
@@ -746,7 +746,7 @@ REX_HOOK_RAW(sub_825989D8) {  // Swap: marks the end of each frame
     Enter(kSwap, ctx);
     CaptureDevice(base);  // in case CreateDevice was called before this started
   }
-  __imp__sub_825989D8(ctx, base);
+  __imp__sub_82598A20(ctx, base);
   g_nfsmw_fotogramas_juego.fetch_add(1, std::memory_order_relaxed);
   if (on) {
     Leave(kSwap, ctx);
@@ -755,8 +755,8 @@ REX_HOOK_RAW(sub_825989D8) {  // Swap: marks the end of each frame
   }
 }
 
-REX_EXTERN(__imp__sub_8259C2A8);
-REX_HOOK_RAW(sub_8259C2A8) {  // SetVertexShader
+REX_EXTERN(__imp__sub_8259C2F0);
+REX_HOOK_RAW(sub_8259C2F0) {  // SetVertexShader
   using namespace nfsmw::d3d_trace;
   StartOnce();
   const bool on = g_enabled.load(std::memory_order_relaxed);
@@ -765,15 +765,15 @@ REX_HOOK_RAW(sub_8259C2A8) {  // SetVertexShader
   if (on) {
     Enter(kSetVertexShader, ctx);
   }
-  __imp__sub_8259C2A8(ctx, base);
+  __imp__sub_8259C2F0(ctx, base);
   if (on) {
     Leave(kSetVertexShader, ctx);
     RememberShader(false, shader, lr, base);
   }
 }
 
-REX_EXTERN(__imp__sub_8259BDC0);
-REX_HOOK_RAW(sub_8259BDC0) {  // SetPixelShader
+REX_EXTERN(__imp__sub_8259BE08);
+REX_HOOK_RAW(sub_8259BE08) {  // SetPixelShader
   using namespace nfsmw::d3d_trace;
   StartOnce();
   const bool on = g_enabled.load(std::memory_order_relaxed);
@@ -782,7 +782,7 @@ REX_HOOK_RAW(sub_8259BDC0) {  // SetPixelShader
   if (on) {
     Enter(kSetPixelShader, ctx);
   }
-  __imp__sub_8259BDC0(ctx, base);
+  __imp__sub_8259BE08(ctx, base);
   if (on) {
     Leave(kSetPixelShader, ctx);
     RememberShader(true, shader, lr, base);

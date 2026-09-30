@@ -15,9 +15,9 @@
 //   1. MMIO registers at 0x7FC80000. Without a registered range REX_MM_LOAD_U32
 //      reads uninitialized garbage (mmio_handler.cpp:105-124). The same fixed
 //      values as the emulation are returned (graphics_system.cpp:232-262).
-//   2. The ring read pointer: the game spins in sub_82597690 watching that
+//   2. The ring read pointer: the game spins in sub_825976D8 watching that
 //      word to know how much room it has left.
-//   3. Interrupts: vblank (sub_82597960 counts vblanks) and PM4_INTERRUPT
+//   3. Interrupts: vblank (sub_825979A8 counts vblanks) and PM4_INTERRUPT
 //      packets, which signal that the GPU reached that point of the ring.
 //   4. GPU writes to memory (MEM_WRITE, COND_WRITE, REG_TO_MEM and
 //      EVENT_WRITE_*), with the semantics of graphics/command_processor.cpp.
@@ -187,7 +187,7 @@ REXCVAR_DEFINE_BOOL(nfsmw_nativo_im_load_sin_memcmp, true, "NFSMW",
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
 /*
- * IM_LOAD_IMMEDIATE with an exact cache. sub_825A37D8 (D3D) copies the VS into the ring itself with the
+ * IM_LOAD_IMMEDIATE with an exact cache. sub_825A3820 (D3D) copies the VS into the ring itself with the
  * fetches patched and, if needed, with the outputs the PS does not read nulled: op 2B, 4,000-8,000 per second
  * in stretches of a race, at 1.5-2.8 us each ("tiempos por paquete"). Now a packet whose microcode is
  * byte-identical to one already seen (memcmp against the stored raw copy) reuses its swapped copy, its
@@ -927,10 +927,10 @@ class SistemaGraficoNativo final : public rex::system::IGraphicsSystem {
 
   // EVENT_WRITE_ZPD: the sample counters of an occlusion query.
   // How the game's D3D does it:
-  //   - Issue(BEGIN) (sub_8258F810) marks the structure at base + 0 with 0xFFFFFEED and requests the
+  //   - Issue(BEGIN) (sub_8258F858) marks the structure at base + 0 with 0xFFFFFEED and requests the
   //     counters at base + 32.
-  //   - Issue(END) requests them at base + 0 (sub_8258EA28).
-  //   - GetData (sub_8258F998) waits for base + 0 to lose the marks and returns
+  //   - Issue(END) requests them at base + 0 (sub_8258EA70).
+  //   - GetData (sub_8258F9E0) waits for base + 0 to lose the marks and returns
   //     ZPass(base + 0) - ZPass(base + 32).
   // Here (nfsmw_nativo_oclusion = 1): at the start, base + 32 is zeroed, and the draws up to the end are
   // counted on the GPU with host queries. At the end, base + 0 gets the last measured count of that
@@ -2632,7 +2632,7 @@ class SistemaGraficoNativo final : public rex::system::IGraphicsSystem {
   // Self-checking guard:
   //   - watching: always the regular memcmp and, if the shortcut had a candidate, it is compared with the
   //     memcmp result. After kImAtajoAMirar agreements, no disagreement and at least one in-place patch
-  //     seen (proof that the sub_825A2FB8 hook runs: without it, a patch would not bump any version), it
+  //     seen (proof that the sub_825A3000 hook runs: without it, a patch would not bump any version), it
   //     moves to applying;
   //   - applying: the candidate is used without memcmp, except 1 in every kImAtajoComprobarCada, which is
   //     still compared;
@@ -2812,7 +2812,7 @@ class SistemaGraficoNativo final : public rex::system::IGraphicsSystem {
 
   // The fetch patcher was called from outside its two known call sites.
   void ApagarImAtajoPorOtros() {
-    REXLOG_ERROR("[nativo] C5a IM_LOAD sin memcmp: DIFERENCIA. El parcheador de los fetch (sub_825A2FB8) se ha "
+    REXLOG_ERROR("[nativo] C5a IM_LOAD sin memcmp: DIFERENCIA. El parcheador de los fetch (sub_825A3000) se ha "
                  "llamado {} veces desde fuera de sus dos llamadas conocidas (retorno {:08X}, destino {:08X}): puede "
                  "escribir microcodigo de otra forma. Atajo APAGADO para el resto de la sesion (todas las cargas con "
                  "memcmp, como antes de la 184)",
@@ -2845,9 +2845,9 @@ class SistemaGraficoNativo final : public rex::system::IGraphicsSystem {
 
   // IM_LOAD_IMMEDIATE with an exact cache (nfsmw_nativo_im_inmediato_cache).
   //
-  // Who sends them: sub_825A37D8, the D3D copy path. If the GPU has not yet passed the fence of a VS's
-  // last IM_LOAD, or outputs the PS does not read must be disabled (sub_825A36A8), it copies the microcode
-  // at [VS+40] ([VS+600] bytes) into the ring itself and patches it there (sub_825A2FB8 on the copy).
+  // Who sends them: sub_825A3820, the D3D copy path. If the GPU has not yet passed the fence of a VS's
+  // last IM_LOAD, or outputs the PS does not read must be disabled (sub_825A36F0), it copies the microcode
+  // at [VS+40] ([VS+600] bytes) into the ring itself and patches it there (sub_825A3000 on the copy).
   // Always type 0 (VS).
   // In a race there are stretches with 4,000-8,000 per second at 1.5-2.8 us each ("tiempos por
   // paquete", op 2B): the regular path byte-swaps word by word, computes the XXH3 in Identificar, copies
@@ -4428,7 +4428,7 @@ class SistemaGraficoNativo final : public rex::system::IGraphicsSystem {
                             con_memcmp, im_i_comprobadas_, im_i_version_cambiada_, im_i_anuladas_,
                             std::min(im_atajo_comprobadas_, kImAtajoAMirar), kImAtajoAMirar,
                             im_atajo_fase_ == kImAtajoMirando && im_atajo_comprobadas_ >= kImAtajoAMirar
-                                ? " (sin ningun parche en su sitio visto: el gancho de sub_825A2FB8 no corre)"
+                                ? " (sin ningun parche en su sitio visto: el gancho de sub_825A3000 no corre)"
                                 : "",
                             microcodigo::g_parches_en_su_sitio.load(std::memory_order_relaxed),
                             microcodigo::g_parches_en_copia.load(std::memory_order_relaxed),

@@ -17,12 +17,12 @@
 // The large per-call self times did not come from the bodies of those functions but from what they call
 // without being measured, often through pointers. That is why those calls are measured and their targets
 // are logged:
-//  - the voice's virtual call (sub_825EB0E8, method +8 of the object r3 + (byte [r5 + 73] + 16) * 8) goes to
-//    sub_825E1CD0, which reads what the XMA decoder leaves;
-//  - the effects pointer of sub_825DCED8 (0x82A2B1C8) points to sub_825FDFB0, the gain-scaled sum (native in
+//  - the voice's virtual call (sub_825EB130, method +8 of the object r3 + (byte [r5 + 73] + 16) * 8) goes to
+//    sub_825E1D18, which reads what the XMA decoder leaves;
+//  - the effects pointer of sub_825DCF20 (0x82A2B1C8) points to sub_825FDFF8, the gain-scaled sum (native in
 //    nfsmw_audio_suma.cpp);
-//  - sub_825D24E0 walks the list at 0x82C5E214 (+0 next, +8 function, +12 argument) and calls each function;
-//  - sub_825DA1E0 drains the command queue at 0x82A2AD38 (count at +0, 8-byte entries from +8 with type, index
+//  - sub_825D2528 walks the list at 0x82C5E214 (+0 next, +8 function, +12 argument) and calls each function;
+//  - sub_825DA228 drains the command queue at 0x82A2AD38 (count at +0, 8-byte entries from +8 with type, index
 //    and argument) and calls method +84 or +80 of the object in the table at +772.
 
 #include <algorithm>
@@ -57,37 +57,37 @@ enum Indice : size_t {
   kOrdenes,
   kBucle825E4160,
   kBucle825D07C8,
-  kGrafo825CFCC8,
+  kGrafo825CFD10,
   kMezclaPaquete,
-  k825DD288,
-  k825DCED8,
-  k825D2538,
-  k825ED568,
-  k825DBD68,
-  k825DCCB0,
-  k825DC0C0,
+  k825DD2D0,
+  k825DCF20,
+  k825D2580,
+  k825ED5B0,
+  k825DBDB0,
+  k825DCCF8,
+  k825DC108,
   kVoz,
   kRemuestreo,
   kRemuestreoLineal,
-  kRemuestreo826033A0,
-  k826022C8,
-  k826047B0,
-  k8262E220,
-  k82619820,
-  k82612270,
-  k825E1370,
-  k825CD088,
+  kRemuestreo826033E8,
+  k82602310,
+  k826047F8,
+  k8262E268,
+  k82619868,
+  k826122B8,
+  k825E13B8,
+  k825CD0D0,
   kAyuda826BDD90,
-  k82601A08,
-  k825D05F8,
-  k825DE890,
-  k826027F0,
-  k825F2F60,
-  k825D24E0,
-  k825ED268,
-  k825DA1E0,
-  k825FDFB0,
-  k825E1CD0,
+  k82601A50,
+  k825D0640,
+  k825DE8D8,
+  k82602838,
+  k825F2FA8,
+  k825D2528,
+  k825ED2B0,
+  k825DA228,
+  k825FDFF8,
+  k825E1D18,
   kNumero
 };
 
@@ -98,43 +98,43 @@ struct Funcion {
   const char* papel;
 };
 
-// Call tree seen in the recompiled code and in a PC profiling run: the server loop (sub_825E3E28) calls the
-// commands and sub_825E4160 and sub_825D07C8; sub_825ED350 runs once per packet; sub_825EB0E8, once per voice.
+// Call tree seen in the recompiled code and in a PC profiling run: the server loop (sub_825E3E70) calls the
+// commands and sub_825E41A8 and sub_825D0810; sub_825ED398 runs once per packet; sub_825EB130, once per voice.
 constexpr std::array<Funcion, kNumero> kFunciones = {{
-    {"sub_825CF780", "ordenes de audio"},
-    {"sub_825E4160", "del bucle"},
-    {"sub_825D07C8", "del bucle y del grafo"},
-    {"sub_825CFCC8", "grafo de sonido"},
-    {"sub_825ED350", "una vez por paquete"},
-    {"sub_825DD288", "de 825ED350"},
-    {"sub_825DCED8", "de 825DD288"},
-    {"sub_825D2538", "de 825ED350"},
-    {"sub_825ED568", "de 825ED350"},
-    {"sub_825DBD68", "de 825DCED8, hoja"},
-    {"sub_825DCCB0", "de 825DCED8"},
-    {"sub_825DC0C0", "de 825DCED8"},
-    {"sub_825EB0E8", "una vez por voz"},
-    {"sub_82602BE0", "llama a los remuestreadores"},
-    {"sub_826031C0", "remuestreador lineal"},
-    {"sub_826033A0", "otro remuestreador"},
-    {"sub_826022C8", "de 825EB0E8"},
-    {"sub_826047B0", "de 826022C8, 9 veces"},
-    {"sub_8262E220", "de 825EB0E8"},
-    {"sub_82619820", "hoja"},
-    {"sub_82612270", "llamada indirecta"},
-    {"sub_825E1370", "cambio de bytes"},
-    {"sub_825CD088", "llamada desde 1 sitio"},
-    {"sub_826BDD90", "ayuda con 950 llamadores"},
-    {"sub_82601A08", "de 825E4160, hoja"},
-    {"sub_825D05F8", "de 825D07C8, hoja"},
-    {"sub_825DE890", "memoria de trabajo de la voz y del paquete"},
-    {"sub_826027F0", "de 825EB0E8"},
-    {"sub_825F2F60", "de 825ED350"},
-    {"sub_825D24E0", "lista de 0x82C5E214, por tramo"},
-    {"sub_825ED268", "de 825ED350, por tramo"},
-    {"sub_825DA1E0", "cola de ordenes de 0x82A2AD38, por tramo"},
-    {"sub_825FDFB0", "suma con ganancia, de 825DCED8"},
-    {"sub_825E1CD0", "lectura de la voz (XMA)"},
+    {"sub_825CF7C8", "ordenes de audio"},
+    {"sub_825E41A8", "del bucle"},
+    {"sub_825D0810", "del bucle y del grafo"},
+    {"sub_825CFD10", "grafo de sonido"},
+    {"sub_825ED398", "una vez por paquete"},
+    {"sub_825DD2D0", "de 825ED398"},
+    {"sub_825DCF20", "de 825DD2D0"},
+    {"sub_825D2580", "de 825ED398"},
+    {"sub_825ED5B0", "de 825ED398"},
+    {"sub_825DBDB0", "de 825DCF20, hoja"},
+    {"sub_825DCCF8", "de 825DCF20"},
+    {"sub_825DC108", "de 825DCF20"},
+    {"sub_825EB130", "una vez por voz"},
+    {"sub_82602C28", "llama a los remuestreadores"},
+    {"sub_82603208", "remuestreador lineal"},
+    {"sub_826033E8", "otro remuestreador"},
+    {"sub_82602310", "de 825EB130"},
+    {"sub_826047F8", "de 82602310, 9 veces"},
+    {"sub_8262E268", "de 825EB130"},
+    {"sub_82619868", "hoja"},
+    {"sub_826122B8", "llamada indirecta"},
+    {"sub_825E13B8", "cambio de bytes"},
+    {"sub_825CD0D0", "llamada desde 1 sitio"},
+    {"sub_826BDDE0", "ayuda con 950 llamadores"},
+    {"sub_82601A50", "de 825E41A8, hoja"},
+    {"sub_825D0640", "de 825D0810, hoja"},
+    {"sub_825DE8D8", "memoria de trabajo de la voz y del paquete"},
+    {"sub_82602838", "de 825EB130"},
+    {"sub_825F2FA8", "de 825ED398"},
+    {"sub_825D2528", "lista de 0x82C5E214, por tramo"},
+    {"sub_825ED2B0", "de 825ED398, por tramo"},
+    {"sub_825DA228", "cola de ordenes de 0x82A2AD38, por tramo"},
+    {"sub_825FDFF8", "suma con ganancia, de 825DCF20"},
+    {"sub_825E1D18", "lectura de la voz (XMA)"},
 }};
 
 struct Cuenta {
@@ -201,11 +201,11 @@ Destinos g_destinos_cola;
 
 constexpr int64_t kVentanaNs = 500'000'000;
 constexpr int64_t kResumenNs = 10'000'000'000;
-// sub_825DCED8: lis r9,-32093; addi r31,r9,-20288 (0x82A2B0C0) and lwz r4,264(r31) before its bctrl.
+// sub_825DCF20: lis r9,-32093; addi r31,r9,-20288 (0x82A2B0C0) and lwz r4,264(r31) before its bctrl.
 constexpr uint32_t kPunteroEfecto = 0x82A2B0C0 + 264;
-// sub_825D24E0: lis r11,-32058; lwz r11,-7660(r11).
+// sub_825D2528: lis r11,-32058; lwz r11,-7660(r11).
 constexpr uint32_t kCabezaLista = 0x82C5E214;
-// sub_825DA1E0: lis r11,-32093; addi r30,r11,-21192.
+// sub_825DA228: lis r11,-32093; addi r30,r11,-21192.
 constexpr uint32_t kColaOrdenes = 0x82A2AD38;
 
 int64_t AhoraNs() {
@@ -220,7 +220,7 @@ void CerrarVentana() {
   }
 }
 
-// The same reads sub_825EB0E8 does before its bctrl (0x825EB16C-0x825EB190), done on entry. Only pointers
+// The same reads sub_825EB130 does before its bctrl (0x825EB1B4-0x825EB1D8), done on entry. Only pointers
 // that land where expected are followed: the object in the heap (above 64 KB) and the virtual table in the
 // XEX image.
 void AnotarDestinoVoz(uint8_t* base, uint32_t r3, uint32_t r5) {
@@ -237,7 +237,7 @@ void AnotarDestinoEfecto(uint8_t* base) {
   g_destinos_efecto.Anotar(nfsmw::audio_nativo::Leer32(base, kPunteroEfecto));
 }
 
-// The functions of the list that sub_825D24E0 is about to walk (at most 32 nodes).
+// The functions of the list that sub_825D2528 is about to walk (at most 32 nodes).
 void AnotarDestinosLista(uint8_t* base) {
   using nfsmw::audio_nativo::Leer32;
   uint32_t nodo = Leer32(base, kCabezaLista);
@@ -247,7 +247,7 @@ void AnotarDestinosLista(uint8_t* base) {
   }
 }
 
-// The methods sub_825DA1E0 is about to call when draining its queue (at most 64 entries).
+// The methods sub_825DA228 is about to call when draining its queue (at most 64 entries).
 void AnotarDestinosCola(uint8_t* base) {
   using nfsmw::audio_nativo::Leer16;
   using nfsmw::audio_nativo::Leer32;
@@ -283,12 +283,12 @@ void Informar(int64_t ahora) {
   const double segundos = double(ahora - g_desde_ns) / 1e9;
   REXLOG_INFO("[audio] funciones del servidor en {:.1f} s, CPU del hilo {} ms, tiempo propio medido {:.1f} ms: {}",
               segundos, cpu_ms, double(g_medido_ns) / 1e6, texto);
-  REXLOG_INFO("[audio] llamada virtual de sub_825EB0E8 en {:.1f} s: {}", segundos, g_destinos_voz.Texto());
-  REXLOG_INFO("[audio] efecto de sub_825DCED8 (puntero en 0x{:08X}) en {:.1f} s: {}", kPunteroEfecto, segundos,
+  REXLOG_INFO("[audio] llamada virtual de sub_825EB130 en {:.1f} s: {}", segundos, g_destinos_voz.Texto());
+  REXLOG_INFO("[audio] efecto de sub_825DCF20 (puntero en 0x{:08X}) en {:.1f} s: {}", kPunteroEfecto, segundos,
               g_destinos_efecto.Texto());
-  REXLOG_INFO("[audio] lista de sub_825D24E0 (0x{:08X}) en {:.1f} s: {}", kCabezaLista, segundos,
+  REXLOG_INFO("[audio] lista de sub_825D2528 (0x{:08X}) en {:.1f} s: {}", kCabezaLista, segundos,
               g_destinos_lista.Texto());
-  REXLOG_INFO("[audio] cola de sub_825DA1E0 (0x{:08X}) en {:.1f} s: {}", kColaOrdenes, segundos,
+  REXLOG_INFO("[audio] cola de sub_825DA228 (0x{:08X}) en {:.1f} s: {}", kColaOrdenes, segundos,
               g_destinos_cola.Texto());
   g_cuentas = {};
   g_destinos_voz = {};
@@ -388,43 +388,43 @@ void MarcarHiloServidor() {
     __imp__##nombre(ctx, base);                                      \
   }
 
-NFSMW_MEDIR_FUNCION(sub_825CF780, kOrdenes)
-NFSMW_MEDIR_FUNCION(sub_825E4160, kBucle825E4160)
-NFSMW_MEDIR_FUNCION(sub_825D07C8, kBucle825D07C8)
-NFSMW_MEDIR_FUNCION(sub_825CFCC8, kGrafo825CFCC8)
-NFSMW_MEDIR_FUNCION(sub_825ED350, kMezclaPaquete)
-NFSMW_MEDIR_FUNCION(sub_825DD288, k825DD288)
-// sub_825DCED8 also records where the effects pointer points.
-REX_EXTERN(__imp__sub_825DCED8);
-REX_HOOK_RAW(sub_825DCED8) {
-  nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::k825DCED8);
+NFSMW_MEDIR_FUNCION(sub_825CF7C8, kOrdenes)
+NFSMW_MEDIR_FUNCION(sub_825E41A8, kBucle825E4160)
+NFSMW_MEDIR_FUNCION(sub_825D0810, kBucle825D07C8)
+NFSMW_MEDIR_FUNCION(sub_825CFD10, kGrafo825CFD10)
+NFSMW_MEDIR_FUNCION(sub_825ED398, kMezclaPaquete)
+NFSMW_MEDIR_FUNCION(sub_825DD2D0, k825DD2D0)
+// sub_825DCF20 also records where the effects pointer points.
+REX_EXTERN(__imp__sub_825DCF20);
+REX_HOOK_RAW(sub_825DCF20) {
+  nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::k825DCF20);
   if (medida.activa()) {
     nfsmw::audio_perfil::AnotarDestinoEfecto(base);
   }
-  __imp__sub_825DCED8(ctx, base);
+  __imp__sub_825DCF20(ctx, base);
 }
-NFSMW_MEDIR_FUNCION(sub_825D2538, k825D2538)
-NFSMW_MEDIR_FUNCION(sub_825ED568, k825ED568)
-NFSMW_MEDIR_FUNCION(sub_825DBD68, k825DBD68)
-NFSMW_MEDIR_FUNCION(sub_825DCCB0, k825DCCB0)
-NFSMW_MEDIR_FUNCION(sub_825DC0C0, k825DC0C0)
+NFSMW_MEDIR_FUNCION(sub_825D2580, k825D2580)
+NFSMW_MEDIR_FUNCION(sub_825ED5B0, k825ED5B0)
+NFSMW_MEDIR_FUNCION(sub_825DBDB0, k825DBDB0)
+NFSMW_MEDIR_FUNCION(sub_825DCCF8, k825DCCF8)
+NFSMW_MEDIR_FUNCION(sub_825DC108, k825DC108)
 // The voice also records where its virtual call goes.
-REX_EXTERN(__imp__sub_825EB0E8);
-REX_HOOK_RAW(sub_825EB0E8) {
+REX_EXTERN(__imp__sub_825EB130);
+REX_HOOK_RAW(sub_825EB130) {
   nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::kVoz);
   if (medida.activa()) {
     nfsmw::audio_perfil::AnotarDestinoVoz(base, ctx.r3.u32, ctx.r5.u32);
   }
-  __imp__sub_825EB0E8(ctx, base);
+  __imp__sub_825EB130(ctx, base);
 }
-NFSMW_MEDIR_FUNCION(sub_82602BE0, kRemuestreo)
+NFSMW_MEDIR_FUNCION(sub_82602C28, kRemuestreo)
 // The two linear resamplers can run in native code (nfsmw_audio_remuestreo_nativo): their hook calls the
 // selection in nfsmw_audio_remuestreo.cpp instead of going straight to the recompiled function. A single hook
 // per function: on the Switch the linker accepts duplicate definitions (--allow-multiple-definition) and would
 // silently keep one of them.
 namespace nfsmw::audio_remuestreo {
-void Remuestreo826031C0(PPCContext& ctx, uint8_t* base);
-void Remuestreo82619820(PPCContext& ctx, uint8_t* base);
+void Remuestreo82603208(PPCContext& ctx, uint8_t* base);
+void Remuestreo82619868(PPCContext& ctx, uint8_t* base);
 }  // namespace nfsmw::audio_remuestreo
 
 #define NFSMW_MEDIR_FUNCION_POR(nombre, indice, llamada)            \
@@ -433,48 +433,48 @@ void Remuestreo82619820(PPCContext& ctx, uint8_t* base);
     llamada(ctx, base);                                              \
   }
 
-NFSMW_MEDIR_FUNCION_POR(sub_826031C0, kRemuestreoLineal, nfsmw::audio_remuestreo::Remuestreo826031C0)
-NFSMW_MEDIR_FUNCION(sub_826033A0, kRemuestreo826033A0)
-NFSMW_MEDIR_FUNCION(sub_826022C8, k826022C8)
-NFSMW_MEDIR_FUNCION(sub_826047B0, k826047B0)
-NFSMW_MEDIR_FUNCION(sub_8262E220, k8262E220)
-NFSMW_MEDIR_FUNCION_POR(sub_82619820, k82619820, nfsmw::audio_remuestreo::Remuestreo82619820)
-NFSMW_MEDIR_FUNCION(sub_82612270, k82612270)
-NFSMW_MEDIR_FUNCION(sub_825E1370, k825E1370)
+NFSMW_MEDIR_FUNCION_POR(sub_82603208, kRemuestreoLineal, nfsmw::audio_remuestreo::Remuestreo82603208)
+NFSMW_MEDIR_FUNCION(sub_826033E8, kRemuestreo826033E8)
+NFSMW_MEDIR_FUNCION(sub_82602310, k82602310)
+NFSMW_MEDIR_FUNCION(sub_826047F8, k826047F8)
+NFSMW_MEDIR_FUNCION(sub_8262E268, k8262E268)
+NFSMW_MEDIR_FUNCION_POR(sub_82619868, k82619868, nfsmw::audio_remuestreo::Remuestreo82619868)
+NFSMW_MEDIR_FUNCION(sub_826122B8, k826122B8)
+NFSMW_MEDIR_FUNCION(sub_825E13B8, k825E13B8)
 namespace nfsmw::audio_filtro {
-void Filtro825CD088(PPCContext& ctx, uint8_t* base);  // nfsmw_audio_filtro.cpp (nfsmw_audio_filtro_nativo)
+void Filtro825CD0D0(PPCContext& ctx, uint8_t* base);  // nfsmw_audio_filtro.cpp (nfsmw_audio_filtro_nativo)
 }  // namespace nfsmw::audio_filtro
-NFSMW_MEDIR_FUNCION_POR(sub_825CD088, k825CD088, nfsmw::audio_filtro::Filtro825CD088)
-// sub_826BDD90 (the real memcpy of the CRT, 950 callers) now goes through [rexcrt] memmove in overrides.toml
+NFSMW_MEDIR_FUNCION_POR(sub_825CD0D0, k825CD0D0, nfsmw::audio_filtro::Filtro825CD0D0)
+// sub_826BDDE0 (the real memcpy of the CRT, 950 callers) now goes through [rexcrt] memmove in overrides.toml
 // and no longer exists in the generated code: its measurement has nothing to hook.
-// NFSMW_MEDIR_FUNCION(sub_826BDD90, kAyuda826BDD90)
-NFSMW_MEDIR_FUNCION(sub_82601A08, k82601A08)
-NFSMW_MEDIR_FUNCION(sub_825D05F8, k825D05F8)
+// NFSMW_MEDIR_FUNCION(sub_826BDDE0, kAyuda826BDD90)
+NFSMW_MEDIR_FUNCION(sub_82601A50, k82601A50)
+NFSMW_MEDIR_FUNCION(sub_825D0640, k825D0640)
 // What the voice and the per-packet mix call without being measured.
-NFSMW_MEDIR_FUNCION(sub_825DE890, k825DE890)
-NFSMW_MEDIR_FUNCION(sub_826027F0, k826027F0)
-NFSMW_MEDIR_FUNCION(sub_825F2F60, k825F2F60)
-NFSMW_MEDIR_FUNCION(sub_825ED268, k825ED268)
-// sub_825D24E0 and sub_825DA1E0 call through pointers; their targets are recorded.
-REX_EXTERN(__imp__sub_825D24E0);
-REX_HOOK_RAW(sub_825D24E0) {
-  nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::k825D24E0);
+NFSMW_MEDIR_FUNCION(sub_825DE8D8, k825DE8D8)
+NFSMW_MEDIR_FUNCION(sub_82602838, k82602838)
+NFSMW_MEDIR_FUNCION(sub_825F2FA8, k825F2FA8)
+NFSMW_MEDIR_FUNCION(sub_825ED2B0, k825ED2B0)
+// sub_825D2528 and sub_825DA228 call through pointers; their targets are recorded.
+REX_EXTERN(__imp__sub_825D2528);
+REX_HOOK_RAW(sub_825D2528) {
+  nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::k825D2528);
   if (medida.activa()) {
     nfsmw::audio_perfil::AnotarDestinosLista(base);
   }
-  __imp__sub_825D24E0(ctx, base);
+  __imp__sub_825D2528(ctx, base);
 }
-REX_EXTERN(__imp__sub_825DA1E0);
-REX_HOOK_RAW(sub_825DA1E0) {
-  nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::k825DA1E0);
+REX_EXTERN(__imp__sub_825DA228);
+REX_HOOK_RAW(sub_825DA228) {
+  nfsmw::audio_perfil::Medida medida(nfsmw::audio_perfil::k825DA228);
   if (medida.activa()) {
     nfsmw::audio_perfil::AnotarDestinosCola(base);
   }
-  __imp__sub_825DA1E0(ctx, base);
+  __imp__sub_825DA228(ctx, base);
 }
 // The gain-scaled sum can run in native code (nfsmw_audio_suma_nativa, nfsmw_audio_suma.cpp).
 namespace nfsmw::audio_suma {
 void Suma825FDFB0(PPCContext& ctx, uint8_t* base);
 }  // namespace nfsmw::audio_suma
-NFSMW_MEDIR_FUNCION_POR(sub_825FDFB0, k825FDFB0, nfsmw::audio_suma::Suma825FDFB0)
-NFSMW_MEDIR_FUNCION(sub_825E1CD0, k825E1CD0)
+NFSMW_MEDIR_FUNCION_POR(sub_825FDFF8, k825FDFF8, nfsmw::audio_suma::Suma825FDFB0)
+NFSMW_MEDIR_FUNCION(sub_825E1D18, k825E1D18)

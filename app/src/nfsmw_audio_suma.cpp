@@ -1,7 +1,7 @@
-// nfsmw - gain-scaled sum of the sound engine in native code (sub_825FDFB0)
+// nfsmw - gain-scaled sum of the sound engine in native code (sub_825FDFF8)
 //
-// sub_825DCED8 mixes each source into its channels by calling through the pointer at 0x82A2B1C8, which in the
-// measured race always points to sub_825FDFB0 (46,725 out of 46,725 calls). It is a leaf:
+// sub_825DCF20 mixes each source into its channels by calling through the pointer at 0x82A2B1C8, which in the
+// measured race always points to sub_825FDFF8 (46,725 out of 46,725 calls). It is a leaf:
 //   dst[i] = dst[i] + src[i] * g        for i < n
 // with n in r3, the source in r5, the destination in r6 and the gain g in f1, in blocks of 4 samples plus a
 // remainder. Each sample reads the source, reads the destination, does an fmadds
@@ -30,10 +30,10 @@
 #include "nfsmw_audio_nativo.h"
 
 REXCVAR_DEFINE_INT32(nfsmw_audio_suma_nativa, 1, "NFSMW",
-                     "Suma con ganancia del motor de sonido (sub_825FDFB0): 0 = codigo recompilado, 1 = nativo (mismo "
+                     "Suma con ganancia del motor de sonido (sub_825FDFF8): 0 = codigo recompilado, 1 = nativo (mismo "
                      "resultado bit a bit; por defecto), 2 = validar el nativo contra el recompilado");
 
-REX_EXTERN(__imp__sub_825FDFB0);
+REX_EXTERN(__imp__sub_825FDFF8);
 
 namespace nfsmw::audio_suma {
 namespace {
@@ -63,7 +63,7 @@ void Informar(int32_t modo) {
   if (ahora - ultimo < 10000 || !g_ultimo_informe_ms.compare_exchange_strong(ultimo, ahora, std::memory_order_relaxed)) {
     return;
   }
-  NFSMW_INFORME_DIFERIDO("[audio] suma con ganancia (modo {}): sub_825FDFB0 {} llamadas y {} muestras, diferencias con el "
+  NFSMW_INFORME_DIFERIDO("[audio] suma con ganancia (modo {}): sub_825FDFF8 {} llamadas y {} muestras, diferencias con el "
               "recompilado {}",
               modo, g_llamadas.exchange(0), g_muestras.exchange(0), g_diferencias.exchange(0));
 }
@@ -105,7 +105,7 @@ void Validar(PPCContext& ctx, uint8_t* base) {
   const uint32_t destino = ctx.r6.u32;
   const double g = ctx.f1.f64;
   if (n <= 0 || n > kMaxValidar || uint64_t(destino) + uint64_t(n) * 4 > 0xE0000000ull) {
-    __imp__sub_825FDFB0(ctx, base);
+    __imp__sub_825FDFF8(ctx, base);
     return;
   }
   const size_t bytes = size_t(n) * 4;
@@ -113,7 +113,7 @@ void Validar(PPCContext& ctx, uint8_t* base) {
   thread_local std::vector<uint8_t> recompilado;
   uint8_t* p = Dir(base, destino);
   antes.assign(p, p + bytes);
-  __imp__sub_825FDFB0(ctx, base);
+  __imp__sub_825FDFF8(ctx, base);
   recompilado.assign(p, p + bytes);
   std::memcpy(p, antes.data(), bytes);
   Nativo(base, n, origen, destino, g);
@@ -137,7 +137,7 @@ void Validar(PPCContext& ctx, uint8_t* base) {
 void Suma825FDFB0(PPCContext& ctx, uint8_t* base) {
   const int32_t modo = REXCVAR_GET(nfsmw_audio_suma_nativa);
   if (modo != 1 && modo != 2) {
-    __imp__sub_825FDFB0(ctx, base);
+    __imp__sub_825FDFF8(ctx, base);
     return;
   }
   const int32_t n = ctx.r3.s32;

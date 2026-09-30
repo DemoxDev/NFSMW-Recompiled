@@ -1,9 +1,9 @@
 // nfsmw - cutscene diagnostics (WMV)
 //
-// With nfsmw_video_diag = true, sub_826DB4F8 is logged (presentation of a movie frame, main thread,
+// With nfsmw_video_diag = true, sub_826DB548 is logged (presentation of a movie frame, main thread,
 // docs/audio-and-video.md): its caller, the video object, its size, the widths, strides and heights of
 // the planes, the pending frames and the texture group, and every 5 s the rate and the time spent
-// inside. The decoding (sub_827312C0, sub_828C35D8 and sub_8278A518) is in nfsmw_video_nativo.cpp.
+// inside. The decoding (sub_82731310, sub_828C35D8 and sub_8278A568) is in nfsmw_video_nativo.cpp.
 
 #include <atomic>
 #include <chrono>
@@ -70,12 +70,12 @@ void Resumen(const char* que, Contador& c, int64_t ahora) {
 }  // namespace
 }  // namespace nfsmw::video_diag
 
-REX_EXTERN(__imp__sub_826DB4F8);
+REX_EXTERN(__imp__sub_826DB548);
 
-REX_HOOK_RAW(sub_826DB4F8) {
+REX_HOOK_RAW(sub_826DB548) {
   using namespace nfsmw::video_diag;
   if (!REXCVAR_GET(nfsmw_video_diag)) {
-    __imp__sub_826DB4F8(ctx, base);
+    __imp__sub_826DB548(ctx, base);
     return;
   }
   const uint32_t lr = static_cast<uint32_t>(ctx.lr);
@@ -91,7 +91,7 @@ REX_HOOK_RAW(sub_826DB4F8) {
                 Leer32(base, obj + 368), Leer32(base, obj + 372));
   }
   const int64_t antes = AhoraUs();
-  __imp__sub_826DB4F8(ctx, base);
+  __imp__sub_826DB548(ctx, base);
   const int64_t despues = AhoraUs();
   g_presentar.us_dentro.fetch_add(despues - antes, std::memory_order_relaxed);
   Resumen("presentar", g_presentar, despues);

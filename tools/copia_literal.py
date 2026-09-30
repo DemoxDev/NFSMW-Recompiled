@@ -24,29 +24,29 @@ import sys
 # name of the copy, guest function, and how each outgoing call is rewritten (calls are matched with or without the
 # __imp__ prefix that llamadas_directas.py adds)
 COPIES = [
-    ('CopiaOriginal', 'sub_82448E80', {
-        'sub_8259B9B8': 'NFSMW_PASADA_LLAMAR(ctx, base, kLiberar);',
-        'sub_8259C150': 'NFSMW_PASADA_LLAMAR(ctx, base, kSombreadorVertices);',
-        'sub_8259BDC0': 'NFSMW_PASADA_LLAMAR(ctx, base, kSombreadorPixeles);',
+    ('CopiaOriginal', 'sub_82448EA8', {
+        'sub_8259BA00': 'NFSMW_PASADA_LLAMAR(ctx, base, kLiberar);',
+        'sub_8259C198': 'NFSMW_PASADA_LLAMAR(ctx, base, kSombreadorVertices);',
+        'sub_8259BE08': 'NFSMW_PASADA_LLAMAR(ctx, base, kSombreadorPixeles);',
     }, 'NFSMW_PASADA_INDIRECTA'),
-    ('CopiaFlujos', 'sub_82452690', {
-        'sub_8258D968': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kFlujo);',
-        'sub_8258DA60': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kIndices);',
+    ('CopiaFlujos', 'sub_824526B8', {
+        'sub_8258D9B0': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kFlujo);',
+        'sub_8258DAA8': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kIndices);',
     }, None),
-    ('CopiaDibujo', 'sub_8244ED58', {
-        'sub_826992F0': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kEfecto);',
-        'sub_82593C50': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kDibujar);',
-        'sub_8244EDF8': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kSegundo);',
+    ('CopiaDibujo', 'sub_8244ED80', {
+        'sub_82699340': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kEfecto);',
+        'sub_82593C98': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kDibujar);',
+        'sub_8244EE20': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kSegundo);',
     }, 'NFSMW_PEGAMENTO_INDIRECTA'),
-    ('CopiaPegamento', 'sub_82452730', {
-        'sub_8244EA48': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kCambioEstado);',
-        'sub_82453E20': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kVistaE20);',
-        'sub_82453D60': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kVistaD60);',
-        'sub_82452690': 'NFSMW_PEGAMENTO_FLUJOS(ctx, base);',
-        'sub_8244ED58': 'NFSMW_PEGAMENTO_DIBUJO(ctx, base);',
+    ('CopiaPegamento', 'sub_82452758', {
+        'sub_8244EA70': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kCambioEstado);',
+        'sub_82453E48': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kVistaE20);',
+        'sub_82453D88': 'NFSMW_PEGAMENTO_LLAMAR(ctx, base, kVistaD60);',
+        'sub_824526B8': 'NFSMW_PEGAMENTO_FLUJOS(ctx, base);',
+        'sub_8244ED80': 'NFSMW_PEGAMENTO_DIBUJO(ctx, base);',
     }, None),
-    ('CopiaBucle', 'sub_82454B50', {
-        'sub_82452730': 'NFSMW_BUCLE_LLAMAR(ctx, base);',
+    ('CopiaBucle', 'sub_82454B78', {
+        'sub_82452758': 'NFSMW_BUCLE_LLAMAR(ctx, base);',
     }, None),
 ]
 

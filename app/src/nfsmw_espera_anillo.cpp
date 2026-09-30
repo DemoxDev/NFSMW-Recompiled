@@ -1,8 +1,8 @@
 // nfsmw - the game's D3D waits without spinning (native renderer).
 //
 // WHY (PC profile of a race)
-//   The "Main XThread" runs at 100 % of a core in a race and 84 % of that is a busy-wait. sub_82597690
-//   (wait for the GPU to read the ring up to the write pointer) calls sub_825A5D18 in a loop, without
+//   The "Main XThread" runs at 100 % of a core in a race and 84 % of that is a busy-wait. sub_825976D8
+//   (wait for the GPU to read the ring up to the write pointer) calls sub_825A5D60 in a loop, without
 //   sleeping. That function only checks whether the read pointer the GPU reports back ([[device+10384]])
 //   has changed since the last iteration and, if 2 s pass without changes, declares the GPU hung. Seven
 //   other D3D waits also call it. On the console that thread runs at 80 % in a race and takes CPU away
@@ -49,7 +49,7 @@
 
 REXCVAR_DEFINE_BOOL(nfsmw_espera_anillo_bloqueante, true, "NFSMW",
                     "Renderizador nativo: el D3D del juego duerme mientras espera a que el hilo del anillo "
-                    "avance, en vez de dar vueltas en sub_825A5D18")
+                    "avance, en vez de dar vueltas en sub_825A5D60")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 REXCVAR_DEFINE_INT32(nfsmw_espera_anillo_max_us, 2000, "NFSMW",
                      "Renderizador nativo: espera maxima por vuelta de las esperas del D3D del juego, en "
@@ -178,7 +178,7 @@ void Informe() {
  *
  * The code above measures each polling iteration (capped at 2 ms), so a 60 ms block of the game shows up
  * as thirty expired iterations and never as "worst 60 ms". That is why several builds did not show where
- * the game blocks in the corners and the alley. This measures the whole of sub_82597690 ("wait for the
+ * the game blocks in the corners and the alley. This measures the whole of sub_825976D8 ("wait for the
  * GPU to read the ring up to here", called by the 13 D3D waits, eWaitUntilRenderingDone included) from
  * entry to exit, and breaks it down by return address (who called it).
  *
@@ -253,15 +253,15 @@ void InformeEsperasCompletas() {
                   double(lns) / 1e6, double(lmax) / 1e6, (unsigned long long)llargas);
     por_llamante += buf;
   }
-  REXLOG_INFO("[espera_anillo] esperas COMPLETAS del D3D (sub_82597690) en 10 s: {} en {:.1f} ms, {} de mas "
+  REXLOG_INFO("[espera_anillo] esperas COMPLETAS del D3D (sub_825976D8) en 10 s: {} en {:.1f} ms, {} de mas "
               "de 8 ms, peor {:.1f} ms; por llamante (lr:n/ms/peor/largas):{}",
               n, double(ns) / 1e6, largas, double(ns_max) / 1e6, por_llamante);
 }
 
 }  // namespace
 
-REX_EXTERN(__imp__sub_825A5D18);
-REX_HOOK_RAW(sub_825A5D18) {
+REX_EXTERN(__imp__sub_825A5D60);
+REX_HOOK_RAW(sub_825A5D60) {
   static const bool activo = nfsmw::nativo::Activo() && REXCVAR_GET(nfsmw_espera_anillo_bloqueante);
   if (activo) {
     const uint32_t estructura = ctx.r3.u32;
@@ -296,16 +296,16 @@ REX_HOOK_RAW(sub_825A5D18) {
       }
     }
   }
-  __imp__sub_825A5D18(ctx, base);
+  __imp__sub_825A5D60(ctx, base);
 }
 
 // The complete D3D wait for the ring to reach a point, with who asks for it.
 // See the comment of AnotarEsperaCompleta. Always measured: two clock reads per wait.
-REX_EXTERN(__imp__sub_82597690);
-REX_HOOK_RAW(sub_82597690) {
+REX_EXTERN(__imp__sub_825976D8);
+REX_HOOK_RAW(sub_825976D8) {
   const uint32_t lr = uint32_t(ctx.lr);
   const auto antes = std::chrono::steady_clock::now();
-  __imp__sub_82597690(ctx, base);
+  __imp__sub_825976D8(ctx, base);
   const uint64_t ns = uint64_t(
       std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - antes).count());
   AnotarEsperaCompleta(lr, ns);

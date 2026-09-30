@@ -1,4 +1,4 @@
-// nfsmw - per-draw matrices (sub_824538D0) in native code.
+// nfsmw - per-draw matrices (sub_824538F8) in native code.
 //
 // WHAT IT IS (PowerPC read instruction by instruction in nfsmw_recomp.78.cpp:16080)
 //   Called by the game thread on every draw with r3 = material object ([r3+12] = handle table, [r3+28] =
@@ -10,8 +10,8 @@
 //   3. The rigid inverse of A (xyz rows of A0..A2 with -A3.Ai in w) and, with it, E' (E = [r5+48..56] with
 //      w = [0x82063038]) and G' (G = [[0x82A2C4F8] + 288]): vmsum3fp128, vmsum4fp128 and vmrghw. They go to
 //      r1+80 and r1+112.
-//   4. Depending on the handles in the table, the effect's writers: 82449C00 (matrix) with M1 (+572), A
-//      (+568), M3 (+468) and M2 (+576); 82449988 (vector) with E' (+284), G' (+292) and, if there is a
+//   4. Depending on the handles in the table, the effect's writers: 82449C28 (matrix) with M1 (+572), A
+//      (+568), M3 (+468) and M2 (+576); 824499B0 (vector) with E' (+284), G' (+292) and, if there is a
 //      handle at +564, with the vector at +16 of the pass record normalized by sub_8215_A588 into r1+320.
 //
 // WHY NATIVE
@@ -66,7 +66,7 @@
 //
 // SELF-CHECKING GUARD (cvar nfsmw_matrices_nativo; project rule)
 //   The first kComprobaciones calls of each path (cache and computation) and then 1 of every 4096: the
-//   native version records each write (with copies of the two writers, 82449C00 and 82449988, identical to
+//   native version records each write (with copies of the two writers, 82449C28 and 824499B0, identical to
 //   the ones in nfsmw_material_nativo.cpp), it is undone, the original runs (with the real hooks) and the
 //   recorded bytes, the whole frame (416 bytes), r3, r1 and the FPCR are compared. The original's result is
 //   always kept. A single difference turns the native version off for the session and writes
@@ -87,15 +87,15 @@
 #include <string>
 
 REXCVAR_DEFINE_BOOL(nfsmw_matrices_nativo, true, "NFSMW",
-                    "Matrices por dibujo (sub_824538D0: A x P, A x Q, A x C y la inversa rigida de A) en nativo "
+                    "Matrices por dibujo (sub_824538F8: A x P, A x Q, A x C y la inversa rigida de A) en nativo "
                     "(build 176), identico bit a bit. Se comprueba contra la original (las primeras 100.000 llamadas "
                     "de cada camino y despues 1 de cada 4096) y se apaga sola si difiere; false = la original")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REX_EXTERN(__imp__sub_824538D0);
+REX_EXTERN(__imp__sub_824538F8);
 // The writers by their usual name: the hook in nfsmw_material_nativo.cpp (or the original, if there is none).
-REX_EXTERN(sub_82449C00);
-REX_EXTERN(sub_82449988);
+REX_EXTERN(sub_82449C28);
+REX_EXTERN(sub_824499B0);
 // The original normalization. The name is assembled from parts on purpose: tools/llamadas_directas.py treats
 // any address that appears whole in app/src as hooked, and its 70 calls from the generated code must stay
 // direct.
@@ -207,22 +207,22 @@ constexpr uint32_t kUno = 0x82063038;           // lfs f0,12344(0x82060000): w o
 constexpr uint32_t kCero = 0x82061CE8;          // lfs f12,-4944(0x82063038): the 0 of the normalization
 constexpr uint32_t kMarco = 384;                // stwu r1,-384(r1)
 // Return addresses of each bl (ctx.lr in the generated code)
-constexpr uint32_t kVueltaPrologo = 0x824538D8;  // bl __savegprlr (which the generated code does not execute)
-constexpr uint32_t kVuelta572 = 0x82453C30;
-constexpr uint32_t kVuelta568 = 0x82453C4C;
-constexpr uint32_t kVueltaNormalizar = 0x82453C7C;
-constexpr uint32_t kVuelta564 = 0x82453C8C;
-constexpr uint32_t kVuelta468 = 0x82453CA8;
-constexpr uint32_t kVuelta576 = 0x82453CC4;
-constexpr uint32_t kVuelta284 = 0x82453D1C;
-constexpr uint32_t kVuelta292 = 0x82453D3C;
+constexpr uint32_t kVueltaPrologo = 0x82453900;  // bl __savegprlr (which the generated code does not execute)
+constexpr uint32_t kVuelta572 = 0x82453C58;
+constexpr uint32_t kVuelta568 = 0x82453C74;
+constexpr uint32_t kVueltaNormalizar = 0x82453CA4;
+constexpr uint32_t kVuelta564 = 0x82453CB4;
+constexpr uint32_t kVuelta468 = 0x82453CD0;
+constexpr uint32_t kVuelta576 = 0x82453CEC;
+constexpr uint32_t kVuelta284 = 0x82453D44;
+constexpr uint32_t kVuelta292 = 0x82453D64;
 
 // ---------------------------------------------------------------------------------------------------------------
 // The two writers, copied unchanged from nfsmw_material_nativo.cpp. Only the guard uses them, to record what
 // they are going to write; the normal path calls the hooks, like the original.
 // ---------------------------------------------------------------------------------------------------------------
 constexpr uint32_t kTablaBits = 0x8290DB68;   // lis r8,-32111; addi r8,r8,-9368: the mask of each bit
-constexpr uint32_t kTablaFilas = 0x8208F7C0;  // lis r10,-32247; addi r7,r10,-2112: row masks of 82449C00
+constexpr uint32_t kTablaFilas = 0x8208F7D0;  // lis r10,-32247; addi r7,r10,-2112: row masks of 82449C28
 
 struct Grupo {
   uint32_t sucios;
@@ -246,7 +246,7 @@ inline uint32_t Registro16(uint32_t palabra) {
   return (palabra & 0xFFFFu) << 4;
 }
 
-// 82449988: aligned 16-byte vector. Leaves r3 = old dirty byte.
+// 824499B0: aligned 16-byte vector. Leaves r3 = old dirty byte.
 template <bool A>
 inline uint32_t Escritora9988(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32_t p) {
   uint8_t* const base = m.base;
@@ -263,7 +263,7 @@ inline uint32_t Escritora9988(Memoria<A>& m, uint32_t efecto, uint32_t mango, ui
   return viejo;
 }
 
-// 82449C00: 4x4 matrix (the rows given by the entry, transposed). Leaves r3 = the mask of the dirty bit.
+// 82449C28: 4x4 matrix (the rows given by the entry, transposed). Leaves r3 = the mask of the dirty bit.
 template <bool A>
 inline uint32_t EscritoraC00(Memoria<A>& m, uint32_t efecto, uint32_t mango, uint32_t p) {
   uint8_t* const base = m.base;
@@ -393,7 +393,7 @@ struct EscritorasPorGancho {
     ctx.r3.u64 = efecto;
     ctx.r4.u64 = mango;
     ctx.lr = vuelta;
-    sub_82449C00(ctx, base);
+    sub_82449C28(ctx, base);
     return ctx.r3.u32;
   }
   uint32_t Vector(uint32_t efecto, uint32_t mango, uint32_t p, uint32_t vuelta) {
@@ -401,7 +401,7 @@ struct EscritorasPorGancho {
     ctx.r3.u64 = efecto;
     ctx.r4.u64 = mango;
     ctx.lr = vuelta;
-    sub_82449988(ctx, base);
+    sub_824499B0(ctx, base);
     return ctx.r3.u32;
   }
 };
@@ -484,7 +484,7 @@ inline void Normalizar(Memoria<A>& m, PPCContext& ctx, uint32_t d, uint32_t s) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// sub_824538D0 entera.
+// sub_824538F8 entera.
 // ---------------------------------------------------------------------------------------------------------------
 enum class Camino : uint8_t { kCache, kCalculo, kOriginal };
 enum Motivo : uint32_t { kPorPila = 0, kPorMarco = 1, kPorNaN = 2, kMotivos = 3 };
@@ -701,37 +701,37 @@ Salida Nativa(Memoria<A>& m, PPCContext& ctx, uint32_t r3, uint32_t r4, uint32_t
   if (mango572 != 0) {
     r3_final = esc.Matriz(Leer32(base, r3 + 28), mango572, r1 + 128, kVuelta572);
   }
-  tabla = Leer32(base, r3 + 12);  // loc_82453C30
+  tabla = Leer32(base, r3 + 12);  // loc_82453C58
   const uint32_t mango568 = Leer32(base, tabla + 568);
   if (mango568 != 0) {
     r3_final = esc.Matriz(Leer32(base, r3 + 28), mango568, r4, kVuelta568);  // mr r5,r31 (= [r1+412])
   }
-  tabla = Leer32(base, r3 + 12);  // loc_82453C4C
+  tabla = Leer32(base, r3 + 12);  // loc_82453C74
   const uint32_t mango564 = Leer32(base, tabla + 564);
   if (mango564 != 0) {
     normalizo = true;
     Normalizar(m, ctx, r1 + 320, kPases + kVectorPase + ((3u * indice) << 7));
     r3_final = esc.Vector(Leer32(base, r3 + 28), mango564, r1 + 320, kVuelta564);  // mr r4,r9
   }
-  tabla = Leer32(base, r3 + 12);  // loc_82453C8C
+  tabla = Leer32(base, r3 + 12);  // loc_82453CB4
   const uint32_t mango468 = Leer32(base, tabla + 468);
   if (mango468 != 0) {
     r3_final = esc.Matriz(Leer32(base, r3 + 28), mango468, r1 + 256, kVuelta468);
   }
-  tabla = Leer32(base, r3 + 12);  // loc_82453CA8: lwz r3,12(r29)
+  tabla = Leer32(base, r3 + 12);  // loc_82453CD0: lwz r3,12(r29)
   r3_final = tabla;
   const uint32_t mango576 = Leer32(base, tabla + 576);
   if (mango576 != 0) {
     r3_final = esc.Matriz(Leer32(base, r3 + 28), mango576, r1 + 192, kVuelta576);
   }
-  tabla = Leer32(base, r3 + 12);  // loc_82453CC4
+  tabla = Leer32(base, r3 + 12);  // loc_82453CEC
   const uint32_t mango284 = Leer32(base, tabla + 284);
   const bool con292 = Leer32(base, tabla + 292) != 0;  // decided before the +284 writer
   if (mango284 != 0) {
     r3_final = esc.Vector(Leer32(base, r3 + 28), mango284, r1 + 80, kVuelta284);
   }
   if (con292) {
-    tabla = Leer32(base, r3 + 12);  // loc_82453D1C: the handle is read again
+    tabla = Leer32(base, r3 + 12);  // loc_82453D44: the handle is read again
     r3_final = esc.Vector(Leer32(base, r3 + 28), Leer32(base, tabla + 292), r1 + 112, kVuelta292);
   }
   return {Camino::kCalculo, r3_final, normalizo, 0};
@@ -786,7 +786,7 @@ void Informe() {
   }
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[matrices] sub_824538D0 en nativo (build 176); se comprueban contra la original las primeras {} "
+    REXLOG_INFO("[matrices] sub_824538F8 en nativo (build 176); se comprueban contra la original las primeras {} "
                 "llamadas de cada camino (cache y calculo) y despues 1 de cada {}",
                 kComprobaciones, kPeriodo);
     return;
@@ -853,7 +853,7 @@ inline void Rapido(PPCContext& ctx, uint8_t* base, Contadores& c) {
   if (s.camino == Camino::kOriginal) [[unlikely]] {
     Sumar(c.originales, uint64_t(1));
     Sumar(g_motivos[s.motivo], uint64_t(1));
-    __imp__sub_824538D0(ctx, base);  // from the entry state (the native version has not touched the context)
+    __imp__sub_824538F8(ctx, base);  // from the entry state (the native version has not touched the context)
     return;
   }
   if (s.camino == Camino::kCalculo) {
@@ -869,7 +869,7 @@ void NotarComprobada(uint32_t tipo) {
   const uint64_t total = c.comprobadas_total.load(std::memory_order_relaxed) + 1;
   c.comprobadas_total.store(total, std::memory_order_relaxed);
   if (total == kComprobaciones && !g_apagado.load(std::memory_order_relaxed)) {
-    REXLOG_INFO("[matrices] sub_824538D0 (camino {}): {} llamadas comprobadas contra la original byte a byte, 0 "
+    REXLOG_INFO("[matrices] sub_824538F8 (camino {}): {} llamadas comprobadas contra la original byte a byte, 0 "
                 "diferencias: camino nativo en marcha",
                 kNombres[tipo], kComprobaciones);
   }
@@ -911,7 +911,7 @@ void NotarComprobada(uint32_t tipo) {
     ctx.fpscr.csr = csr_e;
     ctx.fpscr.setcsr(csr_e);
   }
-  __imp__sub_824538D0(ctx, base);
+  __imp__sub_824538F8(ctx, base);
   if (s.camino == Camino::kOriginal) {
     Sumar(g_c[tipo].originales, uint64_t(1));
     Sumar(g_motivos[s.motivo], uint64_t(1));
@@ -949,7 +949,7 @@ void NotarComprobada(uint32_t tipo) {
   }
   g_apagado.store(true, std::memory_order_relaxed);  // the state is already the original's
   const Anotacion* a = mala < reg.n ? &reg.a[mala] : nullptr;
-  REXLOG_INFO("[matrices] DIFERENCIA en sub_824538D0 ({}; camino {}, comprobacion {}): r3 0x{:08X} r4 0x{:08X} r5 "
+  REXLOG_INFO("[matrices] DIFERENCIA en sub_824538F8 ({}; camino {}, comprobacion {}): r3 0x{:08X} r4 0x{:08X} r5 "
               "0x{:08X} r1 0x{:08X}; escritoras {}; direccion 0x{:08X} nativa {} original {}; primer byte distinto "
               "del marco: {}; r3 nativa 0x{:X} original 0x{:X}; FPCR entrada 0x{:X} nativa 0x{:X} original 0x{:X}. "
               "Camino nativo APAGADO para siempre, se queda la original",
@@ -968,7 +968,7 @@ inline bool MismaEntrada(uint8_t* base, const PPCContext& ctx) {
 
 inline void Matrices(PPCContext& ctx, uint8_t* base) {
   if (!Activo()) {
-    __imp__sub_824538D0(ctx, base);
+    __imp__sub_824538F8(ctx, base);
     return;
   }
   const uint32_t tipo = MismaEntrada(base, ctx) ? kTipoCache : kTipoCalculo;
@@ -977,7 +977,7 @@ inline void Matrices(PPCContext& ctx, uint8_t* base) {
   c.llamadas.store(n, std::memory_order_relaxed);
   if (g_apagado.load(std::memory_order_relaxed)) [[unlikely]] {
     Sumar(c.originales, uint64_t(1));
-    __imp__sub_824538D0(ctx, base);
+    __imp__sub_824538F8(ctx, base);
   } else if (n <= kComprobaciones || (n & (kPeriodo - 1)) == 0) [[unlikely]] {
     Comprobar(ctx, base, tipo);
   } else {
@@ -991,8 +991,8 @@ inline void Matrices(PPCContext& ctx, uint8_t* base) {
 }  // namespace
 }  // namespace nfsmw::matrices
 
-// The hook. The 16 calls in the generated code must go to sub_824538D0 and not to __imp__sub_824538D0:
-// tools/llamadas_directas.py leaves them as sub_824538D0 because this file names the address.
-REX_HOOK_RAW(sub_824538D0) {
+// The hook. The 16 calls in the generated code must go to sub_824538F8 and not to __imp__sub_824538F8:
+// tools/llamadas_directas.py leaves them as sub_824538F8 because this file names the address.
+REX_HOOK_RAW(sub_824538F8) {
   nfsmw::matrices::Matrices(ctx, base);
 }

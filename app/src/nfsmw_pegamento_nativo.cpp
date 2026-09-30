@@ -1,11 +1,11 @@
-// nfsmw - the draw glue in native code: sub_82452730 (with 8245_2690 and 8244_ED58 inside, as LTO used to
-// inline them) and the draw-list loop that calls it (sub_82454B50).
+// nfsmw - the draw glue in native code: sub_82452758 (with 8245_2690 and 8244_ED58 inside, as LTO used to
+// inline them) and the draw-list loop that calls it (sub_82454B78).
 //
 // What it is (PowerPC read instruction by instruction: nfsmw_recomp.80.cpp, .36, .16 and .41)
-//   The Main XThread walks each sorted draw list with sub_82454B50 (r3 = the view, r4 = the list: the count at
-//   [lista+0] and 8-byte entries from lista+8 with the index at +4). For each entry it calls sub_82452730 with
+//   The Main XThread walks each sorted draw list with sub_82454B78 (r3 = the view, r4 = the list: the count at
+//   [lista+0] and 8-byte entries from lista+8 with the index at +4). For each entry it calls sub_82452758 with
 //   r3 = the object (52 bytes at 829A_FA64 + 52 x index), r4 = the view, r5/r6 = two words of the loop's frame
-//   (the last effect state). sub_82452730 (frame of 112):
+//   (the last effect state). sub_82452758 (frame of 112):
 //   1. E = [obj+12]; if [E+24] and the flags [obj+8] (0x400/0x800) or [r5]/[r6] change -> 8244_EA48 (effect
 //      state change, which ends in the native pass start). Stores both in [r6]/[r5].
 //   2. Depending on [vista+5]: 8245_3E20 or 8245_3D60 (material, matrices...), with 9 arguments (the 9th at
@@ -13,12 +13,12 @@
 //   3. 8245_2690 (frame of 128): the vertex streams of A = [obj+0] (SetStreamSource, up to 6, 32-byte entries
 //      from A+68; flag 0x8000 of [A+94+32i] marks the last one) and the index buffer M+32 with M = [[obj+4]]
 //      (SetIndices, only if the global index buffer 82A2_D15C changes). Returns ([A+24] - [M+24]) / 2.
-//   4. 8244_ED58 (frame of 112): depending on [E+6], effect parameters (sub_826992F0) and DrawIndexedVertices
-//      (sub_82593C50) with the second draw 8244_EDF8 if 0x10, or the virtual call [[E]+20] if 0x20.
+//   4. 8244_ED58 (frame of 112): depending on [E+6], effect parameters (sub_82699340) and DrawIndexedVertices
+//      (sub_82593C98) with the second draw 8244_EDF8 if 0x10, or the virtual call [[E]+20] if 0x20.
 //
 // Why native
-//   In a stack sampling run (race), sub_82452730 plus what LTO inlined into it took 6.73 points of a core in
-//   self time (1.8 ms per frame at 36.9 FPS): 5.6 belong to sub_82452730, 8245_2690 and 8244_ED58, and 4.3 are
+//   In a stack sampling run (race), sub_82452758 plus what LTO inlined into it took 6.73 points of a core in
+//   self time (1.8 ms per frame at 36.9 FPS): 5.6 belong to sub_82452758, 8245_2690 and 8244_ED58, and 4.3 are
 //   cache-missing loads on the first touch of the object, A, M and E. The Xbox 360 game already prefetched
 //   them with dcbt: two in the loop (the next object and the list 128 bytes ahead) and three here (A, [obj+24]
 //   and [obj+4]), but the recompiler leaves dcbt as a comment (238 in the whole game). Here they come back as
@@ -80,28 +80,28 @@
 #include <string>
 
 REXCVAR_DEFINE_BOOL(nfsmw_pegamento_nativo, true, "NFSMW",
-                    "El pegamento de dibujo (sub_82452730 con los flujos, los indices y el dibujo de cada objeto) y el "
-                    "bucle de la lista que lo llama (sub_82454B50) en nativo (build 186), identicos y con las pistas de "
+                    "El pegamento de dibujo (sub_82452758 con los flujos, los indices y el dibujo de cada objeto) y el "
+                    "bucle de la lista que lo llama (sub_82454B78) en nativo (build 186), identicos y con las pistas de "
                     "cache (dcbt) del juego de Xbox 360. Se comprueban en seco contra una copia literal de la original y "
                     "se apagan solos si difieren; false = las originales")
     .lifecycle(rex::cvar::Lifecycle::kInitOnly);
 
-REX_EXTERN(__imp__sub_82452730);  // the original glue
-REX_EXTERN(__imp__sub_82454B50);  // the original loop
-REX_EXTERN(sub_82452730);         // this file's hook: the loop calls through it, like the original after the patch
+REX_EXTERN(__imp__sub_82452758);  // the original glue
+REX_EXTERN(__imp__sub_82454B78);  // the original loop
+REX_EXTERN(sub_82452758);         // this file's hook: the loop calls through it, like the original after the patch
 // The hooks the original calls, by name (nfsmw_d3d_trace.cpp and nfsmw_d3d_registros_nativo.cpp).
-REX_EXTERN(sub_8258D968);  // SetStreamSource
-REX_EXTERN(sub_8258DA60);  // SetIndices
-REX_EXTERN(sub_826992F0);  // parametros de efecto
-REX_EXTERN(sub_82593C50);  // DrawIndexedVertices
+REX_EXTERN(sub_8258D9B0);  // SetStreamSource
+REX_EXTERN(sub_8258DAA8);  // SetIndices
+REX_EXTERN(sub_82699340);  // parametros de efecto
+REX_EXTERN(sub_82593C98);  // DrawIndexedVertices
 // The rest, as the generated code calls them (8244_EA48 through its sub_ alias, the others directly). The
 // name is built in pieces on purpose: tools/llamadas_directas.py treats any address that appears whole in
 // app/src as hooked, and their calls from the rest of the game must stay direct (__imp__, inlinable).
 #define NFSMW_PEGAMENTO_UNIR_(a, b) a##b
-#define NFSMW_PEGAMENTO_CAMBIO_ESTADO NFSMW_PEGAMENTO_UNIR_(sub_8244, EA48)
-#define NFSMW_PEGAMENTO_VISTA_E20 NFSMW_PEGAMENTO_UNIR_(__imp__sub_8245, 3E20)
-#define NFSMW_PEGAMENTO_VISTA_D60 NFSMW_PEGAMENTO_UNIR_(__imp__sub_8245, 3D60)
-#define NFSMW_PEGAMENTO_SEGUNDO_DIBUJO NFSMW_PEGAMENTO_UNIR_(__imp__sub_8244, EDF8)
+#define NFSMW_PEGAMENTO_CAMBIO_ESTADO NFSMW_PEGAMENTO_UNIR_(sub_8244, EA70)
+#define NFSMW_PEGAMENTO_VISTA_E20 NFSMW_PEGAMENTO_UNIR_(__imp__sub_8245, 3E48)
+#define NFSMW_PEGAMENTO_VISTA_D60 NFSMW_PEGAMENTO_UNIR_(__imp__sub_8245, 3D88)
+#define NFSMW_PEGAMENTO_SEGUNDO_DIBUJO NFSMW_PEGAMENTO_UNIR_(__imp__sub_8244, EE20)
 REX_EXTERN(NFSMW_PEGAMENTO_CAMBIO_ESTADO);
 REX_EXTERN(NFSMW_PEGAMENTO_VISTA_E20);
 REX_EXTERN(NFSMW_PEGAMENTO_VISTA_D60);
@@ -181,29 +181,29 @@ constexpr uint32_t kDispositivo = uint32_t(kLis32093) - 12448u;          // lwz 
 constexpr uint32_t kIndicesActuales = uint32_t(kLis32093) - 11940u;      // lwz/stw rY,-11940(rX): the current index buffer
 constexpr uint64_t kObjetosMenos4 = uint64_t(int64_t(-32101) * 65536 - 1440);  // r29 of the loop: lis -32101; addi -1440
 
-constexpr uint32_t kMarco = 112;        // sub_82452730: stwu r1,-112(r1)
+constexpr uint32_t kMarco = 112;        // sub_82452758: stwu r1,-112(r1)
 constexpr uint32_t kMarcoFlujos = 128;  // 8245_2690
 constexpr uint32_t kMarcoDibujo = 112;  // 8244_ED58
-constexpr uint32_t kMarcoBucle = 144;   // sub_82454B50
+constexpr uint32_t kMarcoBucle = 144;   // sub_82454B78
 constexpr uint32_t kPilaVigilada = kMarco + kMarcoFlujos;  // [r1-240, r1): what the three write on the stack
 
-// sub_82452730
-constexpr uint64_t kVueltaEstado = 0x824527C8;
-constexpr uint64_t kVueltaE20 = 0x82452808;
-constexpr uint64_t kVueltaD60 = 0x82452814;
-constexpr uint64_t kVueltaFlujos = 0x82452824;  // the call to 8245_2690 (its mflr r12)
-constexpr uint64_t kVueltaDibujo = 0x8245284C;  // the call to 8244_ED58 (its mflr r12)
+// sub_82452758
+constexpr uint64_t kVueltaEstado = 0x824527F0;
+constexpr uint64_t kVueltaE20 = 0x82452830;
+constexpr uint64_t kVueltaD60 = 0x8245283C;
+constexpr uint64_t kVueltaFlujos = 0x8245284C;  // the call to 8245_2690 (its mflr r12)
+constexpr uint64_t kVueltaDibujo = 0x82452874;  // the call to 8244_ED58 (its mflr r12)
 // 8245_2690
-constexpr uint64_t kVueltaFlujo = 0x824526D0;
-constexpr uint64_t kVueltaIndices = 0x82452714;
+constexpr uint64_t kVueltaFlujo = 0x824526F8;
+constexpr uint64_t kVueltaIndices = 0x8245273C;
 // 8244_ED58
-constexpr uint64_t kVueltaEfecto = 0x8244ED88;
-constexpr uint64_t kVueltaDibujar = 0x8244EDA8;
-constexpr uint64_t kVueltaSegundo = 0x8244EDC8;
-constexpr uint64_t kVueltaVirtual = 0x8244EDEC;
-// sub_82454B50
-constexpr uint64_t kVueltaBuclePrologo = 0x82454B58;  // bl __savegprlr_26 (the generated code does not run it)
-constexpr uint64_t kVueltaPegamento = 0x82454BE4;
+constexpr uint64_t kVueltaEfecto = 0x8244EDB0;
+constexpr uint64_t kVueltaDibujar = 0x8244EDD0;
+constexpr uint64_t kVueltaSegundo = 0x8244EDF0;
+constexpr uint64_t kVueltaVirtual = 0x8244EE14;
+// sub_82454B78
+constexpr uint64_t kVueltaBuclePrologo = 0x82454B80;  // bl __savegprlr_26 (the generated code does not run it)
+constexpr uint64_t kVueltaPegamento = 0x82454C0C;
 
 enum Que : uint32_t {
   kCambioEstado = 0,  // 8244_EA48
@@ -215,7 +215,7 @@ enum Que : uint32_t {
   kDibujar = 6,       // DrawIndexedVertices
   kSegundo = 7,       // 8244_EDF8
   kIndirecta = 8,     // [[E]+20]
-  kPegamento = 9,     // the loop: sub_82452730
+  kPegamento = 9,     // the loop: sub_82452758
 };
 
 enum Camino : uint32_t {
@@ -242,10 +242,10 @@ struct Reales {
       case kCambioEstado: NFSMW_PEGAMENTO_CAMBIO_ESTADO(ctx, base); break;
       case kVistaE20: NFSMW_PEGAMENTO_VISTA_E20(ctx, base); break;
       case kVistaD60: NFSMW_PEGAMENTO_VISTA_D60(ctx, base); break;
-      case kFlujo: sub_8258D968(ctx, base); break;
-      case kIndices: sub_8258DA60(ctx, base); break;
-      case kEfecto: sub_826992F0(ctx, base); break;
-      case kDibujar: sub_82593C50(ctx, base); break;
+      case kFlujo: sub_8258D9B0(ctx, base); break;
+      case kIndices: sub_8258DAA8(ctx, base); break;
+      case kEfecto: sub_82699340(ctx, base); break;
+      case kDibujar: sub_82593C98(ctx, base); break;
       default: NFSMW_PEGAMENTO_SEGUNDO_DIBUJO(ctx, base); break;
     }
   }
@@ -253,12 +253,12 @@ struct Reales {
     REX_CALL_INDIRECT_FUNC(destino);
   }
   [[gnu::always_inline]] static inline void Pegamento(PPCContext& ctx, uint8_t* base) {
-    sub_82452730(ctx, base);
+    sub_82452758(ctx, base);
   }
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// The whole sub_82452730, with 8245_2690 and 8244_ED58 inlined. L = Reales (real calls) or Grabador (the
+// The whole sub_82452758, with 8245_2690 and 8244_ED58 inlined. L = Reales (real calls) or Grabador (the
 // guard, dry run). Returns the path (kCamino*).
 // ---------------------------------------------------------------------------------------------------------------
 template <class L>
@@ -302,20 +302,20 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   uint64_t r7 = ctx.r7.u64;
   uint64_t r8 = ctx.r8.u64;
   uint64_t r11;
-  if (uint32_t(r9a) == 0) {  // cmplwi cr6,r9,0; beq loc_82452790
+  if (uint32_t(r9a) == 0) {  // cmplwi cr6,r9,0; beq loc_824527B8
     r11 = 0;                 // li r11,0
   } else {
     camino |= kCaminoBanderas;
     const uint64_t banderas = L32(base, obj + 8);  // lwz r11,8(r31)
     r8 = uint32_t(banderas) & 0x400u;              // rlwinm r8,r11,0,21,21
-    if (r8 != 0) {                                 // bne loc_82452788
+    if (r8 != 0) {                                 // bne loc_824527B0
       r11 = 1;
     } else {
       r7 = uint32_t(banderas) & 0x800u;  // rlwinm r7,r11,0,20,20
-      r11 = r7 != 0 ? 1 : 0;             // beq loc_82452790 / li r11,1
+      r11 = r7 != 0 ? 1 : 0;             // beq loc_824527B8 / li r11,1
     }
   }
-  // --- loc_82452794: the loop's last effect state ---
+  // --- loc_824527BC: the loop's last effect state ---
   const uint32_t p5 = ctx.r5.u32;
   const uint32_t p6 = ctx.r6.u32;
   const uint64_t r4a = L32(base, p5);   // lwz r4,0(r5)
@@ -325,7 +325,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   r10 = r10 - r11;                      // subf r10,r11,r10
   E32(base, p5, uint32_t(e0));          // stw r3,0(r5)
   r9 = r10 | r9;                        // or r9,r10,r9
-  if (int32_t(uint32_t(r9)) != 0) {     // cmpwi cr6,r9,0; beq loc_824527C8
+  if (int32_t(uint32_t(r9)) != 0) {     // cmpwi cr6,r9,0; beq loc_824527F0
     camino |= kCaminoEstado;
     ctx.r3.u64 = e0;
     ctx.r4.u64 = 0;  // li r4,0
@@ -341,7 +341,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     L::Llamar(ctx, base, kCambioEstado);  // bl 8244_EA48
     r1 = ctx.r1.u64;
   }
-  // --- loc_824527C8: the nine arguments of 8245_3E20 / 8245_3D60 ---
+  // --- loc_824527F0: the nine arguments of 8245_3E20 / 8245_3D60 ---
   const uint64_t p = L32(base, obj + 4);          // lwz r8,4(r31): P
   Anticipar(base, uint32_t(p));                   // the game's dcbt r0,r8 (only [P+0] is read)
   const uint64_t vista5 = L8(base, uint32_t(r30) + 5);  // lbz r7,5(r30)
@@ -357,7 +357,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   ctx.r3.u64 = L32(base, obj + 12);               // lwz r3,12(r31)
   E32(base, uint32_t(r1) + 84u, uint32_t(r11b));  // stw r11,84(r1)
   ctx.r1.u64 = r1;
-  if (uint32_t(vista5) != 0) {  // cmplwi cr6,r7,0; beq loc_8245280C
+  if (uint32_t(vista5) != 0) {  // cmplwi cr6,r7,0; beq loc_82452834
     camino |= kCaminoVistaE20;
     ctx.lr = kVueltaE20;
     L::Llamar(ctx, base, kVistaE20);  // bl 8245_3E20
@@ -367,7 +367,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   }
   r1 = ctx.r1.u64;
 
-  // --- loc_82452814 ---
+  // --- loc_8245283C ---
   const uint64_t p2 = L32(base, obj + 4);          // lwz r10,4(r31)
   const uint64_t a = L32(base, obj + 0);           // lwz r3,0(r31)
   const uint64_t m = L32(base, uint32_t(p2));      // lwz r4,0(r10): M
@@ -387,7 +387,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   const uint64_t r28 = m;  // mr r28,r4
   uint64_t r30f = 0;       // li r30,0
   uint64_t r31f = r27 + 94;  // addi r31,r27,94
-  for (;;) {  // loc_824526B0: one vertex stream
+  for (;;) {  // loc_824526D8: one vertex stream
     const uint64_t r11f = r31f - 2;                          // addi r11,r31,-2
     const uint64_t r10f = L16(base, uint32_t(r31f));        // lhz r10,0(r31)
     ctx.r6.u64 = 0;                                          // li r6,0
@@ -405,17 +405,17 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     const uint64_t r8f = (uint64_t(uint32_t(r9f)) | (r9f << 32)) & 0xFFFF8000u;  // rlwinm r8,r9,0,0,16
     ctx.r9.u64 = r9f;
     ctx.r8.u64 = r8f;
-    if (uint32_t(r8f) != 0) {  // cmplwi cr6,r8,0; bne loc_824526F0: it was the last one
+    if (uint32_t(r8f) != 0) {  // cmplwi cr6,r8,0; bne loc_82452718: it was the last one
       break;
     }
     camino |= kCaminoFlujos;
     r30f += 1;  // addi r30,r30,1
     r31f += 32;  // addi r31,r31,32
-    if (!(int32_t(uint32_t(r30f)) < 6)) {  // cmpwi cr6,r30,6; blt loc_824526B0
+    if (!(int32_t(uint32_t(r30f)) < 6)) {  // cmpwi cr6,r30,6; blt loc_824526D8
       break;
     }
   }
-  // --- loc_824526F0: the index buffer, if it changes ---
+  // --- loc_82452718: the index buffer, if it changes ---
   const uint64_t r11g = kLis32093;                         // lis r11,-32093
   const uint64_t r4g = r28 + 32;                           // addi r4,r28,32
   uint64_t r10g = L32(base, kIndicesActuales);             // lwz r10,-11940(r11)
@@ -424,7 +424,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   ctx.r11.u64 = r11g;
   ctx.r4.u64 = r4g;
   ctx.r10.u64 = r10g;
-  if (int32_t(uint32_t(r10g)) != 0) {  // cmpwi cr6,r10,0; beq loc_82452714
+  if (int32_t(uint32_t(r10g)) != 0) {  // cmpwi cr6,r10,0; beq loc_8245273C
     camino |= kCaminoIndices;
     ctx.r3.u64 = L32(base, kDispositivo);  // lwz r3,-12448(r29)
     ctx.r1.u64 = r1f;
@@ -432,7 +432,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     L::Llamar(ctx, base, kIndices);  // SetIndices, through its hook
     r1f = ctx.r1.u64;
   }
-  // --- loc_82452714: la vuelta ---
+  // --- loc_8245273C: la vuelta ---
   {
     const uint64_t r7f = L32(base, uint32_t(r27) + 24);  // lwz r7,24(r27)
     const uint64_t r6f = L32(base, uint32_t(r28) + 24);  // lwz r6,24(r28)
@@ -444,7 +444,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
   }
   r1 = r1f + kMarcoFlujos;  // addi r1,r1,128 (and b __restgprlr_27: returns without touching lr)
 
-  // ===== Back in sub_82452730 =====
+  // ===== Back in sub_82452758 =====
   {
     const uint64_t r9b = L32(base, obj + 0);         // lwz r9,0(r31)
     const uint64_t r8b = 1431633920;                 // lis r8,21845
@@ -480,7 +480,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     const uint64_t r10d = (uint64_t(uint32_t(r11d)) | (r11d << 32)) & 0x20;  // rlwinm r10,r11,0,26,26
     ctx.r11.u64 = r11d;
     ctx.r10.u64 = r10d;
-    if (uint32_t(r10d) == 0) {  // cmplwi cr6,r10,0; bne loc_8244EDD0
+    if (uint32_t(r10d) == 0) {  // cmplwi cr6,r10,0; bne loc_8244EDF8
       ctx.r3.u64 = L32(base, uint32_t(r31d) + 28);  // lwz r3,28(r31)
       ctx.r1.u64 = r1d;
       ctx.lr = kVueltaEfecto;
@@ -501,7 +501,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
       const uint64_t r8e = (uint64_t(uint32_t(r9e)) | (r9e << 32)) & 0x10;  // rlwinm r8,r9,0,27,27
       ctx.r9.u64 = r9e;
       ctx.r8.u64 = r8e;
-      if (uint32_t(r8e) != 0) {  // cmplwi cr6,r8,0; beq loc_8244EDEC
+      if (uint32_t(r8e) != 0) {  // cmplwi cr6,r8,0; beq loc_8244EE14
         camino |= kCaminoSegundo;
         ctx.r5.u64 = r30d;  // mr r5,r30
         ctx.r4.u64 = r29d;  // mr r4,r29
@@ -511,7 +511,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
         L::Llamar(ctx, base, kSegundo);  // bl 8244_EDF8
         r1d = ctx.r1.u64;
       }
-    } else {  // loc_8244EDD0: the virtual call [[E]+20]
+    } else {  // loc_8244EDF8: the virtual call [[E]+20]
       camino |= kCaminoVirtual;
       const uint64_t r7d = L32(base, uint32_t(r31d) + 0);  // lwz r7,0(r31)
       ctx.r7.u64 = r7d;
@@ -527,7 +527,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
     }
   }
   r1 = r1d + kMarcoDibujo;  // addi r1,r1,112 (and b __restgprlr_29: returns without touching lr)
-  // --- Epilogue of sub_82452730: addi r1,r1,112; lwz r12,-8(r1); mtlr r12 (ld r30/r31: unused loads) ---
+  // --- Epilogue of sub_82452758: addi r1,r1,112; lwz r12,-8(r1); mtlr r12 (ld r30/r31: unused loads) ---
   r1 = r1 + kMarco;
   ctx.r1.u64 = r1;
   ctx.r12.u64 = L32(base, uint32_t(r1) - 8u);
@@ -536,7 +536,7 @@ uint32_t Nativa(PPCContext& ctx, uint8_t* base) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// The whole sub_82454B50: the list loop. Returns the number of draws it made.
+// The whole sub_82454B78: the list loop. Returns the number of draws it made.
 // ---------------------------------------------------------------------------------------------------------------
 template <class L>
 uint32_t NativaBucle(PPCContext& ctx, uint8_t* base) {
@@ -564,10 +564,10 @@ uint32_t NativaBucle(PPCContext& ctx, uint8_t* base) {
   ctx.r11.u64 = r11c;
   ctx.r10.u64 = r10a;
   uint32_t dibujos = 0;
-  if (int32_t(uint32_t(r30a)) > 0) {  // cmpwi cr6,r30,0; ble loc_82454BF4
+  if (int32_t(uint32_t(r30a)) > 0) {  // cmpwi cr6,r30,0; ble loc_82454C1C
     uint64_t r30 = r30a;
     uint64_t r31 = r27 + 12;  // addi r31,r27,12
-    do {  // loc_82454BA4
+    do {  // loc_82454BCC
       const uint64_t r8 = r31 + 4;                         // addi r8,r31,4
       AnticiparBloque(base, uint32_t(r8) + 128u);          // the game's li r7,128; dcbt r7,r8: the list ahead
       const uint64_t r6 = L32(base, uint32_t(r31) + 8);    // lwz r6,8(r31): the index of the next one
@@ -584,14 +584,14 @@ uint32_t NativaBucle(PPCContext& ctx, uint8_t* base) {
       ctx.r11.u64 = r11;
       ctx.r1.u64 = r1;
       ctx.lr = kVueltaPegamento;
-      L::Pegamento(ctx, base);  // sub_82452730, through its hook
+      L::Pegamento(ctx, base);  // sub_82452758, through its hook
       r1 = ctx.r1.u64;
       ++dibujos;
       r30 -= 1;  // addi r30,r30,-1
       r31 += 8;  // addi r31,r31,8
-    } while (uint32_t(r30) != 0);  // cmplwi cr6,r30,0; bne loc_82454BA4
+    } while (uint32_t(r30) != 0);  // cmplwi cr6,r30,0; bne loc_82454BCC
   }
-  // --- loc_82454BF4 ---
+  // --- loc_82454C1C ---
   ctx.r10.u64 = kLis32093;  // lis r10,-32093
   ctx.r11.u64 = 0;          // mr r11,r26
   E32(base, kIndicesActuales, 0);  // stw r11,-11940(r10)
@@ -860,7 +860,7 @@ struct Grabador {
   static void Pegamento(PPCContext& ctx, uint8_t* base) { GrabarBucle(ctx); }
 };
 
-// ==== Literal copy of sub_82452730 and of the two functions it calls that the native version contains
+// ==== Literal copy of sub_82452758 and of the two functions it calls that the native version contains
 // ==== (generated by copia_literal.py): the generated code without comments; the calls go through the policy.
 // ==== Do not edit by hand: the patch checks that it equals the current generated code.
 #define NFSMW_PEGAMENTO_LLAMAR(c, b, que) Llamadas::Llamar(c, b, que)
@@ -878,7 +878,7 @@ struct Grabador {
 #undef NFSMW_PEGAMENTO_DIBUJO
 // ==== End of the literal copy of the glue
 
-// ==== Literal copy of sub_82454B50, generated by tools/copia_literal.py. Do not edit by hand.
+// ==== Literal copy of sub_82454B78, generated by tools/copia_literal.py. Do not edit by hand.
 #define NFSMW_BUCLE_LLAMAR(c, b) Llamadas::Pegamento(c, b)
 #include "copias_literales/CopiaBucle.inc"
 #undef NFSMW_BUCLE_LLAMAR
@@ -958,7 +958,7 @@ void Informe() {
   }
   g_siguiente_ms.store(ahora + 10000, std::memory_order_relaxed);
   if (siguiente == 0) {
-    REXLOG_INFO("[pegamento] pegamento de dibujo (sub_82452730) y su bucle (sub_82454B50) {}",
+    REXLOG_INFO("[pegamento] pegamento de dibujo (sub_82452758) y su bucle (sub_82454B78) {}",
                 Activo() ? "en nativo (build 186): empiezan comprobando contra la copia literal de la original"
                          : "por la original (nfsmw_pegamento_nativo = false)");
     return;
@@ -1093,14 +1093,14 @@ std::string DiferenciaMemoria(const Zonas& z, const uint8_t* copia, const uint8_
   if (g_comprobando.exchange(true, std::memory_order_acquire)) {  // another thread is in the guard
     Sumar(g_saltadas, uint64_t(1));
     Sumar(g_originales[kPorComprobacion], uint64_t(1));
-    __imp__sub_82452730(ctx, base);
+    __imp__sub_82452758(ctx, base);
     return;
   }
   if (!CalcularZonas(ctx, base, z)) {
     g_comprobando.store(false, std::memory_order_release);
     Sumar(g_saltadas, uint64_t(1));
     Sumar(g_originales[kPorComprobacion], uint64_t(1));
-    __imp__sub_82452730(ctx, base);
+    __imp__sub_82452758(ctx, base);
     return;
   }
   Grabacion& copia = g_copia;
@@ -1147,7 +1147,7 @@ std::string DiferenciaMemoria(const Zonas& z, const uint8_t* copia, const uint8_
   }
   const bool demasiadas = copia.n > kMaxLlamadas;
   g_comprobando.store(false, std::memory_order_release);
-  __imp__sub_82452730(ctx, base);  // the original for real, from the entry state: its state is kept
+  __imp__sub_82452758(ctx, base);  // the original for real, from the entry state: its state is kept
   Sumar(g_originales[kPorComprobacion], uint64_t(1));
   if (que.empty() && demasiadas) {
     Sumar(g_saltadas, uint64_t(1));
@@ -1191,14 +1191,14 @@ std::string DiferenciaMemoria(const Zonas& z, const uint8_t* copia, const uint8_
   if (g_comprobando_bucle.exchange(true, std::memory_order_acquire)) {
     Sumar(g_saltadas_bucle, uint64_t(1));
     Sumar(g_originales_bucle[kPorComprobacion], uint64_t(1));
-    __imp__sub_82454B50(ctx, base);
+    __imp__sub_82454B78(ctx, base);
     return;
   }
   if (!CalcularZonasBucle(ctx, base, z, cuenta)) {
     g_comprobando_bucle.store(false, std::memory_order_release);
     Sumar(g_saltadas_bucle, uint64_t(1));
     Sumar(g_originales_bucle[kPorComprobacion], uint64_t(1));
-    __imp__sub_82454B50(ctx, base);
+    __imp__sub_82454B78(ctx, base);
     return;
   }
   GrabacionBucle& copia = g_copia_bucle;
@@ -1249,7 +1249,7 @@ std::string DiferenciaMemoria(const Zonas& z, const uint8_t* copia, const uint8_
   }
   const bool demasiadas = copia.n > kMaxBucle;
   g_comprobando_bucle.store(false, std::memory_order_release);
-  __imp__sub_82454B50(ctx, base);  // the original for real
+  __imp__sub_82454B78(ctx, base);  // the original for real
   Sumar(g_originales_bucle[kPorComprobacion], uint64_t(1));
   if (que.empty() && demasiadas) {
     Sumar(g_saltadas_bucle, uint64_t(1));
@@ -1311,7 +1311,7 @@ void Pegamento(PPCContext& ctx, uint8_t* base) {
   }
   if (!Activo() || g_apagado.load(std::memory_order_relaxed)) [[unlikely]] {
     Sumar(g_originales[kPorApagada], uint64_t(1));
-    __imp__sub_82452730(ctx, base);
+    __imp__sub_82452758(ctx, base);
     return;
   }
   if (n <= kComprobaciones || (n & (kPeriodo - 1)) == 0) [[unlikely]] {
@@ -1329,7 +1329,7 @@ void Pegamento(PPCContext& ctx, uint8_t* base) {
   }
   if ((n & (kMedidaOriginal - 1)) == kMedidaOriginal / 2) [[unlikely]] {
     const int64_t t0 = AhoraNs();
-    __imp__sub_82452730(ctx, base);
+    __imp__sub_82452758(ctx, base);
     Sumar(g_ns_original, uint64_t(AhoraNs() - t0));
     Sumar(g_muestras_original, uint64_t(1));
     Sumar(g_originales[kPorMedida], uint64_t(1));
@@ -1351,7 +1351,7 @@ void Bucle(PPCContext& ctx, uint8_t* base) {
   g_llamadas_bucle.store(n, std::memory_order_relaxed);
   if (!Activo() || g_apagado_bucle.load(std::memory_order_relaxed)) [[unlikely]] {
     Sumar(g_originales_bucle[kPorApagada], uint64_t(1));
-    __imp__sub_82454B50(ctx, base);
+    __imp__sub_82454B78(ctx, base);
     return;
   }
   if (n <= kComprobacionesBucle || Toca(n, kBitsPeriodoBucle, 0)) [[unlikely]] {
@@ -1361,7 +1361,7 @@ void Bucle(PPCContext& ctx, uint8_t* base) {
   if (Toca(n, kBitsMedidaOriginalBucle, 16)) [[unlikely]] {
     const uint32_t cuenta = uint32_t(L64(base, ctx.r4.u32));  // the list count (the original reads it the same way)
     const int64_t t0 = AhoraNs();
-    __imp__sub_82454B50(ctx, base);
+    __imp__sub_82454B78(ctx, base);
     Sumar(g_ns_original_bucle, uint64_t(AhoraNs() - t0));
     Sumar(g_dibujos_original_bucle, uint64_t(int32_t(cuenta) > 0 ? cuenta : 0));
     Sumar(g_originales_bucle[kPorMedida], uint64_t(1));
@@ -1383,11 +1383,11 @@ void Bucle(PPCContext& ctx, uint8_t* base) {
 
 }  // namespace nfsmw::pegamento_nativo
 
-// The generated code's calls go to sub_82452730 (2) and to sub_82454B50 (6): the patch turns them back from
+// The generated code's calls go to sub_82452758 (2) and to sub_82454B78 (6): the patch turns them back from
 // __imp__ to sub_. The indirect-call dispatch table already points to both hooks.
-REX_HOOK_RAW(sub_82452730) {  // the draw glue for one list object
+REX_HOOK_RAW(sub_82452758) {  // the draw glue for one list object
   nfsmw::pegamento_nativo::Pegamento(ctx, base);
 }
-REX_HOOK_RAW(sub_82454B50) {  // the draw-list loop
+REX_HOOK_RAW(sub_82454B78) {  // the draw-list loop
   nfsmw::pegamento_nativo::Bucle(ctx, base);
 }

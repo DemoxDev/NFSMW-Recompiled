@@ -4,18 +4,18 @@
 //  The complete chain, read from the binary. Three levers failed because they all pointed at the same
 //  place, and that place is the smallest of the three that draw.
 //
-//  sub_82443B18 is the shadow pass. It receives the one/two maps boolean in r4 and loops once per map
+//  sub_82443B40 is the shadow pass. It receives the one/two maps boolean in r4 and loops once per map
 //  (r18 = 1 or 2) over views 13 and 14 (r26 starts at 0x82A38070 + 1456 = view 13 and advances 112
 //  bytes). Within each iteration it draws with four different emitters, in this exact order
 //  (nfsmw_recomp.55.cpp:16149, asm 299-438):
 //
-//    1. sub_824FA010(vista, 0x200000)   RenderWorldModels  -> WorldModels with bones
-//    2. sub_824FA010(vista, 0x202000)   RenderWorldModels  -> WorldModels without bones
-//    3. sub_824C3610(cull, vista, 512)  StuffScenery       -> scenery marked as caster
+//    1. sub_824FA038(vista, 0x200000)   RenderWorldModels  -> WorldModels with bones
+//    2. sub_824FA038(vista, 0x202000)   RenderWorldModels  -> WorldModels without bones
+//    3. sub_824C3638(cull, vista, 512)  StuffScenery       -> scenery marked as caster
 //    4. a loop over a global list (0x82C84D38: pointer at +4, count at +12) that calls virtual
 //       method +12 of each element with (vista, 0). These are the entities: the cars.
 //
-//  All four end in the same function, sub_8243E358 = eViewPlatInterface::Render(eModel*, matrix,
+//  All four end in the same function, sub_8243E380 = eViewPlatInterface::Render(eModel*, matrix,
 //  light, flags, blend) (EcstasyData.hpp:232). It is the bottleneck all geometry goes through, which is
 //  why it is measured there.
 //
@@ -114,7 +114,7 @@
 //                    lever is the LOD passed to CarRenderInfo::Render (tireLOD and carLOD
 //                    parameters), not the size.
 //
-//  The breakdown is measured in sub_8243E358 because all four pass through it, and it is attributed
+//  The breakdown is measured in sub_8243E380 because all four pass through it, and it is attributed
 //  with a thread mark set by the RenderWorldModels and StuffScenery hooks. The triangles come from the
 //  model itself: eModel+0x0C = eSolid, eSolid+0x14 = NumPolys (int16), eSolid+0xA0 = name
 //  (Ecstasy.hpp:15 and 95). Only fields the game dereferences in that same call are read, and after
@@ -217,7 +217,7 @@ namespace nfsmw::sombras_lod {
 namespace {
 
 // --- SceneryCullInfo (nfsmwdecomp, Scenery.hpp:123), as laid out on the 360 -------------------
-constexpr uint32_t kRegistroBytes = 208;      // sub_82440890: registro[i] = objeto + i*208
+constexpr uint32_t kRegistroBytes = 208;      // sub_824408B8: registro[i] = objeto + i*208
 constexpr uint32_t kOffContador = 2496;       // objeto+2496 = NumCullInfos (208 * 12)
 constexpr uint32_t kOffVista = 128;           // +128 = pView
 constexpr uint32_t kOffMascara = 132;         // +132 = ExcludeFlags
@@ -254,7 +254,7 @@ constexpr uint32_t kPagina = 0x1000u;
 // --- Render constants -------------------------------------------------------------------------
 // WorldModel.cpp:253 WorldObjectMaximumRadius; the radius every WorldModel is measured with.
 constexpr double kRadioMundo = 35.0;
-// exc_flag that sub_82443B18 passes to RenderWorldModels (WorldModel.cpp:281-292).
+// exc_flag that sub_82443B40 passes to RenderWorldModels (WorldModel.cpp:281-292).
 constexpr uint32_t kFlagSombra = 0x200000u;   // "only those that cast shadows"
 constexpr uint32_t kFlagSinHuesos = 0x2000u;  // with the bit: static ones; without it: animated ones
 // The three numbers of ScenerySectionHeader::DrawAScenery, in pixels and absolute.
@@ -579,14 +579,14 @@ void LatirFotograma(const uint8_t* base) {
 // dereferences the Solid, so reading those two fields cannot touch any page the game has not
 // already touched.
 // =============================================================================================
-REX_EXTERN(__imp__sub_8243E358);
+REX_EXTERN(__imp__sub_8243E380);
 // Render runs natively (nfsmw_eview_nativo.cpp, cvar nfsmw_eview_nativo). This is still the only hook
-// of sub_8243E358: instead of the original it calls nfsmw::eview::Render, which chooses between the
+// of sub_8243E380: instead of the original it calls nfsmw::eview::Render, which chooses between the
 // native version (checked against the original) and the original.
 namespace nfsmw::eview {
 void Render(PPCContext& ctx, uint8_t* base);
 }
-REX_HOOK_RAW(sub_8243E358) {
+REX_HOOK_RAW(sub_8243E380) {
   using namespace nfsmw::sombras_lod;
   if (!g_reparto_activo.load(std::memory_order_relaxed)) {
     nfsmw::eview::Render(ctx, base);
@@ -628,8 +628,8 @@ REX_HOOK_RAW(sub_8243E358) {
 //      original value on exit, so nobody else is overwritten (nfsmw_sombras_corte writes the same
 //      field from the pass hook and keeps its own bookkeeping).
 // =============================================================================================
-REX_EXTERN(__imp__sub_824FA010);
-REX_HOOK_RAW(sub_824FA010) {
+REX_EXTERN(__imp__sub_824FA038);
+REX_HOOK_RAW(sub_824FA038) {
   using namespace nfsmw::sombras_lod;
   const uint32_t vista = ctx.r3.u32;
   const uint32_t flags = ctx.r4.u32;
@@ -680,7 +680,7 @@ REX_HOOK_RAW(sub_824FA010) {
     }
   }
 
-  __imp__sub_824FA010(ctx, base);
+  __imp__sub_824FA038(ctx, base);
 
   if (restaurar) {
     Escribir32(base, vista + kOffPixelMinSize, pmin_original);
@@ -696,8 +696,8 @@ REX_HOOK_RAW(sub_824FA010) {
 // removes (mCastsShadow, bones, PixelMinSize and frustum), which is how to check whether
 // nfsmw_sombras_mundo_corte bites.
 // =============================================================================================
-REX_EXTERN(__imp__sub_824F9D78);
-REX_HOOK_RAW(sub_824F9D78) {
+REX_EXTERN(__imp__sub_824F9DA0);
+REX_HOOK_RAW(sub_824F9DA0) {
   using namespace nfsmw::sombras_lod;
   if (g_reparto_activo.load(std::memory_order_relaxed)) {
     uint32_t id = 0;
@@ -705,7 +705,7 @@ REX_HOOK_RAW(sub_824F9D78) {
       g_mundo_mirados[id].fetch_add(1, std::memory_order_relaxed);
     }
   }
-  __imp__sub_824F9D78(ctx, base);
+  __imp__sub_824F9DA0(ctx, base);
 }
 
 // =============================================================================================
@@ -714,8 +714,8 @@ REX_HOOK_RAW(sub_824F9D78) {
 // r3 = the GrandSceneryCullInfo, r4 = the view, r5 = the stuff_flags (512 in the shadow pass).
 // It only marks the emitter: within this call, everything that goes through eView::Render is scenery.
 // =============================================================================================
-REX_EXTERN(__imp__sub_824C3610);
-REX_HOOK_RAW(sub_824C3610) {
+REX_EXTERN(__imp__sub_824C3638);
+REX_HOOK_RAW(sub_824C3638) {
   using namespace nfsmw::sombras_lod;
   uint32_t id = 0;
   const bool marcar = VistaValida(base, ctx.r4.u32, &id);
@@ -723,19 +723,19 @@ REX_HOOK_RAW(sub_824C3610) {
   if (marcar) {
     t_emisor = kEmisorEscenario;
   }
-  __imp__sub_824C3610(ctx, base);
+  __imp__sub_824C3638(ctx, base);
   t_emisor = emisor_previo;
 }
 
 // =============================================================================================
 // GrandSceneryCullInfo::DoCulling. Builds the frame's SceneryCullInfo entries and then walks them.
-// sub_82440890 calls it and only sub_82445660 calls that one, so: once per race frame. That is why
+// sub_824408B8 calls it and only sub_82445688 calls that one, so: once per race frame. That is why
 // the report heartbeat goes here.
 // Only ExcludeFlags (+132) is touched here. H (+192) cannot be touched here: the first loop of this
 // same function copies it from the view (Scenery.cpp:1005).
 // =============================================================================================
-REX_EXTERN(__imp__sub_824C3468);
-REX_HOOK_RAW(sub_824C3468) {
+REX_EXTERN(__imp__sub_824C3490);
+REX_HOOK_RAW(sub_824C3490) {
   using namespace nfsmw::sombras_lod;
   LatirFotograma(base);
   const uint32_t objeto = ctx.r3.u32;
@@ -766,7 +766,7 @@ REX_HOOK_RAW(sub_824C3468) {
       }
     }
   }
-  __imp__sub_824C3468(ctx, base);
+  __imp__sub_824C3490(ctx, base);
 }
 
 // =============================================================================================
@@ -775,8 +775,8 @@ REX_HOOK_RAW(sub_824C3468) {
 // writing +192 does anything. Measured inert (see above): nfsmw_sombras_lod_h defaults to 0 and this
 // does nothing unless turned on by hand.
 // =============================================================================================
-REX_EXTERN(__imp__sub_824C33D0);
-REX_HOOK_RAW(sub_824C33D0) {
+REX_EXTERN(__imp__sub_824C33F8);
+REX_HOOK_RAW(sub_824C33F8) {
   using namespace nfsmw::sombras_lod;
   const uint32_t registro = ctx.r4.u32;
 
@@ -851,7 +851,7 @@ REX_HOOK_RAW(sub_824C33D0) {
       }
     }
   }
-  __imp__sub_824C33D0(ctx, base);
+  __imp__sub_824C33F8(ctx, base);
 
   if (contar) {
     // pCurrentDrawInfo advances 12 bytes per object the culling adds to this view's list.

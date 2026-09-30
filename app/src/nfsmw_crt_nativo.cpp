@@ -1,16 +1,16 @@
-// nfsmw - native memset of the game's CRT (sub_826BE610)
+// nfsmw - native memset of the game's CRT (sub_826BE660)
 //
-// sub_826BE610 is the memset of the game's CRT, as seen in the generated code:
+// sub_826BE660 is the memset of the game's CRT, as seen in the generated code:
 //  - writes byte by byte until the destination is 4-byte aligned;
 //  - replicates the byte into a word with two rlwimi;
 //  - writes 16-byte blocks with four stw, then the remaining words and the leftover bytes;
 //  - leaves r3 untouched.
-// It is the sibling of the memcpy at 0x826BE1B0, which already goes to the host's through [rexcrt] in
+// It is the sibling of the memcpy at 0x826BE200, which already goes to the host's through [rexcrt] in
 // overrides.toml. Putting it there too would require regenerating and rebuilding all the code; a hook in the
 // app has the same effect. The recompiled code writes with volatile stores and byte swapping and std::memset
 // writes the same thing in one go: memory ends up identical. Only volatile registers change (r0, r4-r6, ctr
 // and cr0), which the caller does not read after the call.
-// The audio calls it for every source and packet (sub_825DCED8), but the whole game uses it.
+// The audio calls it for every source and packet (sub_825DCF20), but the whole game uses it.
 //
 // On the Switch, if the write lands on a watched page, the exception handler unwatches it and replays the
 // instruction without decoding it (exception_handler_switch.cpp), just like with the host memcpy.
@@ -30,13 +30,13 @@
 #include <rex/logging.h>
 
 REXCVAR_DEFINE_INT32(nfsmw_crt_memset_nativo, 1, "NFSMW",
-                     "memset del CRT del juego (sub_826BE610): 0 = codigo recompilado, 1 = memset del host (la memoria "
+                     "memset del CRT del juego (sub_826BE660): 0 = codigo recompilado, 1 = memset del host (la memoria "
                      "queda igual; por defecto), 2 = validar el nativo contra el recompilado");
 REXCVAR_DEFINE_BOOL(nfsmw_crt_diag, false, "NFSMW",
-                    "Diagnostico: cuenta las llamadas y los bytes del memset del juego (sub_826BE610) y anota un "
+                    "Diagnostico: cuenta las llamadas y los bytes del memset del juego (sub_826BE660) y anota un "
                     "resumen cada 10 s");
 
-REX_EXTERN(__imp__sub_826BE610);
+REX_EXTERN(__imp__sub_826BE660);
 
 namespace nfsmw::crt {
 namespace {
@@ -89,14 +89,14 @@ void Validar(PPCContext& ctx, uint8_t* base) {
     if (n != 0) {
       g_sin_validar.fetch_add(1, std::memory_order_relaxed);
     }
-    __imp__sub_826BE610(ctx, base);
+    __imp__sub_826BE660(ctx, base);
     return;
   }
   thread_local std::vector<uint8_t> antes;
   thread_local std::vector<uint8_t> recompilado;
   uint8_t* p = rex::memory::GuestPtr<uint8_t*>(base, destino);
   antes.assign(p, p + n);
-  __imp__sub_826BE610(ctx, base);
+  __imp__sub_826BE660(ctx, base);
   const uint32_t r3_recompilado = ctx.r3.u32;
   recompilado.assign(p, p + n);
   std::memcpy(p, antes.data(), n);
@@ -115,14 +115,14 @@ void Validar(PPCContext& ctx, uint8_t* base) {
 
 }  // namespace
 
-void Memset826BE610(PPCContext& ctx, uint8_t* base) {
+void Memset826BE660(PPCContext& ctx, uint8_t* base) {
   const int32_t modo = REXCVAR_GET(nfsmw_crt_memset_nativo);
   if (modo == 1 && !REXCVAR_GET(nfsmw_crt_diag)) {
     Nativo(ctx, base);
     return;
   }
   if (modo != 1 && modo != 2) {
-    __imp__sub_826BE610(ctx, base);
+    __imp__sub_826BE660(ctx, base);
     return;
   }
   const uint64_t llamadas = g_llamadas.fetch_add(1, std::memory_order_relaxed) + 1;
@@ -140,6 +140,6 @@ void Memset826BE610(PPCContext& ctx, uint8_t* base) {
 }  // namespace nfsmw::crt
 
 // A single hook per function: on the Switch the linker accepts duplicate definitions and would silently keep one.
-REX_HOOK_RAW(sub_826BE610) {
-  nfsmw::crt::Memset826BE610(ctx, base);
+REX_HOOK_RAW(sub_826BE660) {
+  nfsmw::crt::Memset826BE660(ctx, base);
 }

@@ -4,11 +4,11 @@
 //  THE FAILURE (observed on the console, in the menu with the gamepad)
 //  The menu audio goes silent and the race never finishes loading. The
 //  watchdog always dumps guest thread 0xD waiting forever in
-//  KeWaitForSingleObject (lr 0x82853230) on the audio server's event,
-//  with ctr = 0x8285D560: its last indirect call was the SetState of a
+//  KeWaitForSingleObject (lr 0x82853280) on the audio server's event,
+//  with ctr = 0x8285D5B0: its last indirect call was the SetState of a
 //  packet submission that succeeded.
 //
-//  THE SERVER LOOP (sub_825E3E28, recompiled code)
+//  THE SERVER LOOP (sub_825E3E70, recompiled code)
 //  Object in r31 and a ring of 2 packets of 6144 bytes:
 //    +146        active              +152        XAudio voice
 //    +12444      R: next packet to submit
@@ -16,17 +16,17 @@
 //    +12452      event (auto-reset)
 //    +12456+88*i packet i (its context, at +84, is &state[i])
 //    +12632+4*i  state i: 0 free, 1 full, 2 submitted to the voice
-//  1. Waits for the event at 0x825E3EF0 with sub_828531E8, with no timeout.
+//  1. Waits for the event at 0x825E3F38 with sub_82853238, with no timeout.
 //  2. On wakeup, if slot W is not free, it waits again without attempting
 //     any submission.
-//  3. If it is free: sub_825CF780 (the game's audio commands), mixes into W
+//  3. If it is free: sub_825CF7C8 (the game's audio commands), mixes into W
 //     (state 1) and submits in order while the voice has a free node (bit 0x20
-//     of sub_82851D98): sub_82851F00 and state 2.
-//  4. The end of each packet arrives through sub_825E4358 (state 0 and signal)
-//     from the SDK's audio thread; each pass of the voice calls sub_825E4338,
+//     of sub_82851DE8): sub_82851F50 and state 2.
+//  4. The end of each packet arrives through sub_825E43A0 (state 0 and signal)
+//     from the SDK's audio thread; each pass of the voice calls sub_825E4380,
 //     which only signals.
 //  If the voice stops returning end-of-packet notifications, the thread keeps
-//  waiting with slot W occupied: sub_825CF780 never runs again and the game's
+//  waiting with slot W occupied: sub_825CF7C8 never runs again and the game's
 //  audio commands, including those of the race load, go unserviced.
 //
 //  WHAT THIS FILE DOES
@@ -127,9 +127,9 @@ int64_t (*g_reloj_ms)() = &RelojReal;
 
 namespace {
 
-constexpr uint32_t kRetornoEspera = 0x825E3EF4;
-constexpr uint32_t kRetornoEntrega = 0x825E4068;
-constexpr uint32_t kRetornoArranque = 0x825E3A3C;
+constexpr uint32_t kRetornoEspera = 0x825E3F3C;
+constexpr uint32_t kRetornoEntrega = 0x825E40B0;
+constexpr uint32_t kRetornoArranque = 0x825E3A84;
 constexpr uint32_t kBanderaServidor = 0x82A2B2AC;
 constexpr uint32_t kOffActivo = 146;
 constexpr uint32_t kOffVoz = 152;
@@ -371,18 +371,18 @@ void EsperarPaqueteServidor(size_t) {
 }  // namespace
 }  // namespace nfsmw::audio_servidor
 
-REX_EXTERN(__imp__sub_828531E8);
-REX_EXTERN(__imp__sub_825E4358);
-REX_EXTERN(__imp__sub_825E4338);
-REX_EXTERN(__imp__sub_82851F00);
-REX_EXTERN(__imp__sub_82851FB8);
-REX_EXTERN(sub_82851D98);
+REX_EXTERN(__imp__sub_82853238);
+REX_EXTERN(__imp__sub_825E43A0);
+REX_EXTERN(__imp__sub_825E4380);
+REX_EXTERN(__imp__sub_82851F50);
+REX_EXTERN(__imp__sub_82852008);
+REX_EXTERN(sub_82851DE8);
 
 namespace nfsmw::audio_servidor {
 namespace {
 
 // Submits the full packets in order while the voice has a free node, with
-// the same condition and the same steps as 0x825E4030-0x825E4090.
+// the same condition and the same steps as 0x825E4078-0x825E40D8.
 uint64_t Reentregar(PPCContext& ctx, uint8_t* base, uint32_t obj) {
   uint64_t entregados = 0;
   for (int vuelta = 0; vuelta < 2; ++vuelta) {
@@ -393,14 +393,14 @@ uint64_t Reentregar(PPCContext& ctx, uint8_t* base, uint32_t obj) {
     const uint32_t salida = ctx.r1.u32 + 80;
     ctx.r3.u64 = Leer32(base, obj + kOffVoz);
     ctx.r4.u64 = salida;
-    sub_82851D98(ctx, base);
+    sub_82851DE8(ctx, base);
     if ((base[salida] & kBitNodoLibre) == 0) {
       break;
     }
     ctx.r3.u64 = Leer32(base, obj + kOffVoz);
     ctx.r4.u64 = obj + kOffPaquetes + kBytesPaquete * r;
     ctx.r5.u64 = 0;
-    __imp__sub_82851F00(ctx, base);
+    __imp__sub_82851F50(ctx, base);
     Escribir32(base, obj + kOffEstados + 4 * r, kEntregado);
     Escribir32(base, obj + kOffR, (r + 1) % 2);
     ++entregados;
@@ -411,23 +411,23 @@ uint64_t Reentregar(PPCContext& ctx, uint8_t* base, uint32_t obj) {
 }  // namespace
 }  // namespace nfsmw::audio_servidor
 
-REX_HOOK_RAW(sub_825E4358) {
+REX_HOOK_RAW(sub_825E43A0) {
   using namespace nfsmw::audio_servidor;
   g_fines.fetch_add(1, std::memory_order_relaxed);
   g_ultimo_fin_ms.store(g_reloj_ms(), std::memory_order_relaxed);
-  __imp__sub_825E4358(ctx, base);
+  __imp__sub_825E43A0(ctx, base);
 }
 
-REX_HOOK_RAW(sub_825E4338) {
+REX_HOOK_RAW(sub_825E4380) {
   using namespace nfsmw::audio_servidor;
   g_pasadas.fetch_add(1, std::memory_order_relaxed);
   if (REXCVAR_GET(nfsmw_audio_diag_anillo)) {
     AnotarPasada(base);
   }
-  __imp__sub_825E4338(ctx, base);
+  __imp__sub_825E4380(ctx, base);
 }
 
-REX_HOOK_RAW(sub_82851F00) {
+REX_HOOK_RAW(sub_82851F50) {
   using namespace nfsmw::audio_servidor;
   const bool del_servidor = static_cast<uint32_t>(ctx.lr) == kRetornoEntrega;
   const bool diag = REXCVAR_GET(nfsmw_audio_diag_anillo);
@@ -443,7 +443,7 @@ REX_HOOK_RAW(sub_82851F00) {
     RetrasarDespertar(static_cast<int32_t>(std::min(double(mezcla_us) * lentitud, 50000.0)));
     mezcla_us = RelojUs() - despertar_us;
   }
-  __imp__sub_82851F00(ctx, base);
+  __imp__sub_82851F50(ctx, base);
   if (del_servidor) {
     g_entregas.fetch_add(1, std::memory_order_relaxed);
     g_ultima_entrega_ms.store(g_reloj_ms(), std::memory_order_relaxed);
@@ -464,10 +464,10 @@ REX_HOOK_RAW(sub_82851F00) {
   }
 }
 
-REX_HOOK_RAW(sub_82851FB8) {
+REX_HOOK_RAW(sub_82852008) {
   using namespace nfsmw::audio_servidor;
   const bool del_servidor = static_cast<uint32_t>(ctx.lr) == kRetornoArranque;
-  __imp__sub_82851FB8(ctx, base);
+  __imp__sub_82852008(ctx, base);
   if (del_servidor) {
     REXLOG_INFO("[audio] voz del servidor de audio arrancada: resultado 0x{:08X}", ctx.r3.u32);
   }
@@ -477,12 +477,12 @@ namespace nfsmw::audio_perfil {
 void MarcarHiloServidor();  // nfsmw_audio_perfil_funciones.cpp (nfsmw_audio_diag_funciones)
 }  // namespace nfsmw::audio_perfil
 
-REX_HOOK_RAW(sub_828531E8) {
+REX_HOOK_RAW(sub_82853238) {
   using namespace nfsmw::audio_servidor;
   const uint32_t obj = ctx.r31.u32;
   if (static_cast<uint32_t>(ctx.lr) != kRetornoEspera || !REXCVAR_GET(nfsmw_audio_rescate) ||
       obj == 0 || Leer32(base, obj + kOffEvento) != ctx.r3.u32) {
-    __imp__sub_828531E8(ctx, base);
+    __imp__sub_82853238(ctx, base);
     return;
   }
   const uint32_t evento = ctx.r3.u32;
@@ -520,7 +520,7 @@ REX_HOOK_RAW(sub_828531E8) {
     ctx.r3.u64 = evento;
     ctx.r4.u64 = static_cast<uint32_t>(r.activo ? kPlazoRescateMs : kPlazoMs);
     ctx.r5.u64 = alertable;
-    __imp__sub_828531E8(ctx, base);
+    __imp__sub_82853238(ctx, base);
     const bool senal = ctx.r3.u32 != kStatusTimeout;
     // Diagnostic: simulates on PC the delay with which the thread runs again on the Switch.
     const int32_t retraso_us = REXCVAR_GET(nfsmw_audio_diag_retraso_servidor_us);
