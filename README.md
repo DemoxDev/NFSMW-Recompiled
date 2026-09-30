@@ -151,10 +151,15 @@ work with its own terms.
 Need for Speed and Most Wanted are trademarks of Electronic Arts Inc. This project is
 not affiliated with, endorsed by, or connected to Electronic Arts in any way.
 
-⚠️ IMPORTANT ROM REQUIREMENT: This project strictly requires the Need for Speed: Most Wanted (2005) [Xbox 360] ROM in its PAL Spain version. PAL UK (English) or NTSC (US) versions are not acceptable (for now).
+⚠️ IMPORTANT ROM REQUIREMENT: this tree is built against the **PAL English** `default.xex`
+(title `454107D9`, entry point `0x8262E9A8`). Every hook and codegen override is written for that
+executable; other editions need their addresses translated first (see
+[tools/editions/pal_en/pal_en.py](tools/editions/pal_en/pal_en.py) and [docs/editions.md](docs/editions.md)).
 
 ## Credits
 
 - [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) — the runtime this is built on
 - [XenonRecomp](https://github.com/hedge-dev/XenonRecomp) — the static recompilation approach
 - [Xenia](https://xenia.jp/) — the kernel and GPU emulation ReXGlue descends from
+- [StevensND/nfsmw-nx](https://github.com/StevensND/nfsmw-nx) — the native Vulkan renderer, the Nintendo
+  Switch port, the audio and cutscene work and the edition tools merged into this tree

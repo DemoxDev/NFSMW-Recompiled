@@ -53,8 +53,22 @@ REXCVAR_DEFINE_BOOL(perf_overlay, false, "UI",
 #include <thread>
 #include <vector>
 
+#if defined(NFSMW_NATIVE_SHADER_LIBRARY)
+#include "nfsmw_shader_hooks.h"
+#endif
+#include "nfsmw_ajustes_graficos.h"
+#include "nfsmw_entorno_mesa.h"
+#include "nfsmw_nativo_captura.h"
+#include "nfsmw_nativo_sistema.h"
+#include "nfsmw_perfil_pc.h"
+#include "nfsmw_prueba_entrada.h"
+#include "nfsmw_video_nativo.h"  // HANG WATCHDOG - cutscene frames with FFmpeg
+
 // Cvar "Contenido > black_edition", definido en nfsmw_menu.cpp.
 REXCVAR_DECLARE(bool, black_edition);
+
+// Game frames, one per Swap (nfsmw_d3d_trace.cpp), with either renderer.
+extern std::atomic<uint64_t> g_nfsmw_fotogramas_juego;
 
 class NfsmwApp : public rex::ReXApp {
  public:
@@ -66,13 +80,29 @@ class NfsmwApp : public rex::ReXApp {
         PPCImageConfig));
   }
 
-  // Available hooks that are unused:
-  //   void OnPreSetup(rex::RuntimeConfig& config) override {}
+  // ==========================================================================
+  //  0. NATIVE RENDERER
+  //
+  //  With nfsmw_renderizador = "nativo" the graphics system is the app's own
+  //  (nfsmw_nativo_sistema.cpp) and the emulation plugin is not loaded:
+  //  ReXApp::SetupPresentation only loads it if config.graphics is empty.
+  //  The code default is still emulation. See docs/native-renderer.md.
+  // ==========================================================================
+  void OnPreSetup(rex::RuntimeConfig& config) override {
+    if (nfsmw::nativo::Activo()) {
+      config.graphics = nfsmw::nativo::CrearSistemaGrafico();
+    }
+    // Automated tests: virtual gamepad if nfsmw_prueba_botones has a script.
+    nfsmw::prueba::EnvolverEntrada(config);
+  }
+
+  // Available hook that is unused:
   //   void OnLoadXexImage(std::string& xex_image) override {}
   //
-  // The hooks in use: portable paths, mandatory settings, the fps counter,
-  // the Black Edition patch (OnPostLoadXexImage), and OnCreateDialogs, which
-  // carries both the ESC settings menu and the --perf_overlay HUD.
+  // The hooks in use: the native renderer (above), portable paths, mandatory
+  // settings, the fps counter, the Black Edition patch (OnPostLoadXexImage),
+  // and OnCreateDialogs, which carries both the ESC settings menu and the
+  // --perf_overlay HUD.
 
  protected:
   // ==========================================================================
@@ -100,7 +130,44 @@ class NfsmwApp : public rex::ReXApp {
   //  (1) exists so that a folder with NFS_Most_Wanted.exe and
   //  NFS_Most_Wanted.iso works unambiguously even if there are more images.
   // ==========================================================================
+  // ==========================================================================
+  //  COPY OF THE SAVES, NEXT TO THE EXECUTABLE
+  //
+  //  The game's saves live where the runtime puts them, which is an opaque
+  //  place: <data>/<xuid>/<title>/<type>/<name>. The player cannot see them and
+  //  there is no convenient way to copy them or recover a corrupted one.
+  //
+  //  With content_backup_root, the runtime also leaves a copy sorted by
+  //  profile when each save is closed:
+  //      saves/<profile>/actual      the latest save
+  //      saves/<profile>/anterior    the previous one, in case the latest gets corrupted
+  //
+  //  On the Switch the NRO is in sdmc:/switch/nfsmw/, so this gives
+  //  sdmc:/switch/nfsmw/saves. On PC, next to the .exe, like everything else.
+  //
+  //  ORDER: this runs before nfsmw.toml is read, so the toml can
+  //  change the folder or leave it empty to copy nothing.
+  // ==========================================================================
+  void ElegirCarpetaDeGuardados() {
+    if (rex::cvar::GetFlagInfo("content_backup_root") == nullptr) {
+      return;  // SDK without that option: nothing happens
+    }
+    if (!rex::cvar::GetFlagByName("content_backup_root").empty()) {
+      return;  // given on the command line
+    }
+    const auto carpeta = rex::filesystem::GetExecutableFolder();
+    if (carpeta.empty()) {
+      return;
+    }
+    const auto destino = carpeta / "saves";
+    if (!rex::cvar::SetFlagByName("content_backup_root", rex::path_to_utf8(destino))) {
+      REXLOG_WARN("[guardado] no se pudo fijar la carpeta de copias en {}",
+                  rex::path_to_utf8(destino));
+    }
+  }
+
   void OnConfigurePaths(rex::PathConfig& paths) override {
+    ElegirCarpetaDeGuardados();
     if (!paths.game_data_root.empty()) {
       return;  // the user specified it on the command line; they take precedence.
     }
@@ -186,14 +253,38 @@ class NfsmwApp : public rex::ReXApp {
   //                          and not a single frame has been drawn yet.
   // ==========================================================================
   void OnPostInitLogging() override {
+    // Mesa/NVK environment variables (nfsmw_mesa_entorno): the toml has already been read and Vulkan is
+    // created later, in SetupPresentation.
+    nfsmw::entorno::AplicarEntornoMesa();
+    // Internal resolution and FPS limit that work with the native renderer: passed to the video mode before
+    // the game requests it, and the settings that do nothing are removed from the F4 menu. With the
+    // emulated renderer on PC the video mode is ours (nfsmw.toml, the launcher and the ESC menu), and this
+    // would overwrite it with 720p.
+    if (nfsmw::nativo::Activo() || REX_PLATFORM_SWITCH) {
+      nfsmw::ajustes::AplicarAjustesGraficos();
+    }
+    nfsmw::ajustes::OcultarAjustesSinEfecto();
+    // Optional post-processing (Graficos/Posproceso) and antialiasing: the output pass picks them up live.
+    nfsmw::ajustes::VigilarAjustesEnVivo();
     // Without a GPU plugin the screen stays black: the game runs, but the
     // runtime discards its graphics calls with "no GPU emulation loaded".
     PonerSiNadieLoPidio("gpu_plugin", "xenos");
-    // Keyboard and mouse in addition to the controller.
+#if defined(NFSMW_NATIVE_SHADER_LIBRARY)
+    // VkDevice must be created with these capabilities; enabling them after
+    // SetupPresentation does not change a device that already exists.
+    PonerSiNadieLoPidio("vulkan_native_shader_features", "true");
+#endif
+#if !REX_PLATFORM_SWITCH
+    // Keyboard and mouse in addition to the controller. The Switch has neither:
+    // the synthetic device would only shadow the libnx controllers.
     PonerSiNadieLoPidio("mnk_mode", "true");
+#endif
   }
 
   void OnPostSetup() override {
+#if defined(NFSMW_NATIVE_SHADER_LIBRARY)
+    nfsmw::native::IniciarBibliotecaShaders();
+#endif
     // THIS IS NOT A PREFERENCE, IT'S A FIX. The game computes its exposure
     // by measuring the scene's average brightness and reading that value
     // back on the CPU. That readback is disabled by default ("none"), so
@@ -214,16 +305,22 @@ class NfsmwApp : public rex::ReXApp {
     // registered the presenter paints inline on it: measured 93% CP and
     // 57-59 fps in a scene that holds 60 with this at 85%. The overlay got
     // the same effect for free because any dialog forces the UI-thread path;
-    // this makes it the default with the overlay off too.
-    PonerSiNadieLoPidio("host_present_from_non_ui_thread", "false");
+    // this makes it the default with the overlay off too. Emulation only: the
+    // native renderer has no command processor thread and presents on its own.
+    if (!nfsmw::nativo::Activo()) {
+      PonerSiNadieLoPidio("host_present_from_non_ui_thread", "false");
+    }
 
+#if !REX_PLATFORM_SWITCH
     // A guest thread polls with Sleep(0) all race long; as sched_yield that is
     // a whole core burnt (97%, a third of it in the kernel) and one more CPU
     // for every mprotect TLB shootdown the command processor issues. 50 us of
     // real sleep per poll: 97% -> 9% of a core, process 317% -> 226%, fps
     // unchanged at a locked 60 in the same scene. Latency added per poll is
-    // ~60 us against a 16.7 ms frame. 0 restores the yield.
+    // ~60 us against a 16.7 ms frame. 0 restores the yield. Not measured on
+    // the Switch, whose guest thread priorities are set by the SDK.
     PonerSiNadieLoPidio("guest_sleep0_us", "50");
+#endif
 
     // Fps counter for the F3 overlay, see below. Returns whatever the
     // watchdog last measured; it doesn't measure here, so opening the
@@ -232,6 +329,17 @@ class NfsmwApp : public rex::ReXApp {
 
     // Hang watchdog, see below.
     ArrancarVigilante();
+
+    // PNG captures for the native renderer tests (nfsmw_captura_cada_s;
+    // off by default). It works the same with emulation, for comparison.
+    nfsmw::captura::Arrancar([this]() -> rex::ui::Presenter* {
+      const auto* rt = runtime();
+      const auto* grafico = rt ? rt->graphics_system() : nullptr;
+      return grafico ? grafico->presenter() : nullptr;
+    });
+
+    // Sampling CPU profiler, Windows only (nfsmw_perfil_pc_desde_s; off by default).
+    nfsmw::perfil_pc::Arrancar();
   }
 
   // ==========================================================================
@@ -282,6 +390,8 @@ class NfsmwApp : public rex::ReXApp {
   }
 
   void OnShutdown() override {
+    nfsmw::perfil_pc::Parar();
+    nfsmw::captura::Parar();
     PararVigilante();
     rex::ui::UnregisterBind("bind_nfsmw_menu");
     if (menu_ != nullptr) {
@@ -382,19 +492,18 @@ class NfsmwApp : public rex::ReXApp {
   //  number, but the WRONG one: it counted UI repaints, which run free and
   //  reach 1770 per second while the game does 17-30.
   //
-  //  A game frame only exists in one place: when the presenter accepts a new
-  //  image from the guest. That's what the SDK's counter -LOCAL PATCH in
-  //  ui/presenter.h- counts, and what's read here. It's computed as a diff
-  //  over the watchdog's one-second tick, so no per-frame hook or moving
-  //  average is needed: the interval is real.
+  //  A game frame only exists in one place: the game's own Swap, which
+  //  nfsmw_d3d_trace.cpp counts in g_nfsmw_fotogramas_juego. It counts the
+  //  same with the emulated and the native renderer (the SDK presenter's
+  //  counter only sees the emulated one). It's computed as a diff over the
+  //  watchdog's one-second tick, so no moving average is needed: the
+  //  interval is real.
   // ==========================================================================
   rex::ui::FrameStats MideFotogramas(double dt_s) {
-    const auto* presentador =
-        runtime() && runtime()->graphics_system() ? runtime()->graphics_system()->presenter() : nullptr;
-    if (!presentador || dt_s <= 0.0) {
+    if (dt_s <= 0.0) {
       return stats_;
     }
-    const uint64_t ahora = presentador->guest_frames_refreshed();
+    const uint64_t ahora = g_nfsmw_fotogramas_juego.load(std::memory_order_relaxed);
     const uint64_t nuevos = ahora - fotogramas_previos_;
     fotogramas_previos_ = ahora;
 
@@ -628,6 +737,7 @@ class NfsmwApp : public rex::ReXApp {
     int desde_ultimo_volcado = 0;
     int desde_instantanea = 0;
     bool avisado = false;
+    int volcados_pilas = 0;  // logs/pilas_N.txt on Windows (nfsmw_perfil_pc.cpp)
     auto tic_anterior = Reloj::now();
 
     while (vigilante_activo_) {
@@ -733,6 +843,15 @@ class NfsmwApp : public rex::ReXApp {
         firma = (firma ^ id_hilo) * 1099511628211ull;
         firma = (firma ^ huella) * 1099511628211ull;
       }
+      // Cutscenes with FFmpeg (nfsmw_video_nativo.cpp): the video player threads wait almost all the time
+      // in the same place and the signature may not change even though the video advances. On PC the alarm
+      // fired during attract_movie with the video at 30 frames/s and the audio without gaps.
+      firma = (firma ^ nfsmw::video_nativo::FotogramasNativos()) * 1099511628211ull;
+      // Native renderer swaps. With the blocking waits (nfsmw_espera_anillo.cpp and
+      // nfsmw_espera_fotograma.cpp) the main thread and the D3D thread sleep almost the whole frame in the
+      // same place, and the signature may not change even though the game keeps drawing: the alarm fired
+      // in the menus of a PC race test with the PM4 ring thread drawing (118,332 draws in those 10 s).
+      firma = (firma ^ nfsmw::nativo::SwapsNativos()) * 1099511628211ull;
 
       // PERIODIC SNAPSHOT, NO MATTER WHAT.
       //
@@ -776,6 +895,12 @@ class NfsmwApp : public rex::ReXApp {
                    "del juego. Esto no es lentitud: esta parado.",
                    quietos, hilos.size());
       VolcarHilos(hilos, true);
+      // And the stacks of every thread in the process, host ones included (ring, audio, copies): on
+      // Windows it writes logs/pilas_N.txt (nfsmw_perfil_pc.cpp). Only on the first two alarms.
+      if (volcados_pilas < 2) {
+        ++volcados_pilas;
+        nfsmw::perfil_pc::VolcarPilas("vigilante");
+      }
       avisado = true;
     }
   }
