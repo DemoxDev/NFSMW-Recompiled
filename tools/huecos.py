@@ -1,30 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Busca huecos de codigo sin funcion asignada en la salida del codegen.
+Finds code gaps with no function assigned in the codegen output.
 
-EL PROBLEMA
+The problem
 -----------
-El binario muere con:
+The binary dies with:
     [FATAL] Call to invalid or unregistered function at guest address 0xXXXXXXXX
 
-Eso pasa cuando algo llama de forma INDIRECTA (por puntero o vtable) a una
-direccion que el analisis no marco como inicio de funcion. La fase Validate no
-los detecta: solo comprueba saltos DIRECTOS (b / bl). Los indirectos solo se
-ven al ejecutar, de uno en uno.
+That happens when something makes an indirect call (through a pointer or vtable) to an
+address the analysis did not mark as a function start. The Validate phase does not
+detect them: it only checks direct branches (b / bl). Indirect ones only show up at
+run time, one at a time.
 
-COMO LOS ENCUENTRA
-------------------
-Cada instruccion PowerPC ocupa 4 bytes y el codegen emite exactamente una linea
-de comentario "\\t// <asm>" por instruccion. Asi que:
+How it finds them
+-----------------
+Every PowerPC instruction takes 4 bytes and the codegen emits exactly one comment line
+"\\t// <asm>" per instruction. So:
 
     fin_de_funcion = inicio + 4 * numero_de_comentarios
 
-Con el inicio de cada funcion (codegen.partition.json) y su fin calculado, todo
-tramo entre el fin de una y el inicio de la siguiente es un hueco sin duenno.
-Los huecos que contienen codigo real son los candidatos a reventar el arranque.
+With the start of each function (codegen.partition.json) and its computed end, every
+stretch between the end of one and the start of the next is a gap with no owner.
+Gaps that contain real code are the candidates for breaking startup.
 
-Uso:
+Usage:
     python tools\\huecos.py
     python tools\\huecos.py --min 8
     python tools\\huecos.py --comprobar 0x8215FEA8 0x826BE258
@@ -32,35 +32,34 @@ Uso:
 
 
 # ============================================================================
-#  LIMITACION CONOCIDA - un hueco NO es siempre una funcion
+#  Known limitation - a gap is not always one function
 #
-#  Esta herramienta emite una declaracion por hueco, en su direccion de
-#  inicio. Eso da por hecho que cada hueco contiene exactamente una funcion,
-#  y es FALSO.
+#  This tool emits one declaration per gap, at its start address. That
+#  assumes each gap contains exactly one function, and it is false.
 #
-#  Un hueco es simplemente espacio que el descubrimiento automatico no
-#  reclamo. Puede contener varias funciones pequenas seguidas, tipicamente
-#  tablas de thunks de 8 y 16 bytes. Al declarar solo el inicio, la fase
-#  Discover se traga el hueco entero como UNA sola funcion y los demas puntos
-#  de entrada quedan inalcanzables. El sintoma es:
+#  A gap is simply space that automatic discovery did not claim. It can
+#  contain several small functions in a row, typically tables of 8- and
+#  16-byte thunks. By declaring only the start, the Discover phase swallows
+#  the whole gap as one single function and the other entry points become
+#  unreachable. The symptom is:
 #
 #     [FATAL] Call to invalid or unregistered function at guest address 0x...
 #
-#  con una direccion que cae DENTRO de un hueco ya declarado.
+#  with an address that falls inside a gap that is already declared.
 #
-#  Comprobado el 2026-09-04: cuatro crashes distintos cayeron dentro de
-#  huecos declarados, a +8, +24, +64 y +96 bytes de su inicio. Por eso el
-#  crash parecia "moverse": cada arreglo destapaba la siguiente entrada del
-#  mismo hueco.
+#  Verified: four different crashes fell inside declared gaps, at +8, +24,
+#  +64 and +96 bytes from their start. That is why the crash seemed to
+#  "move": each fix uncovered the next entry of the same gap.
 #
-#  Subdividir todos los huecos cada 8 bytes NO es la solucion: serian mas de
-#  3000 declaraciones y la mayoria de huecos si contienen una sola funcion,
-#  asi que se estarian declarando puntos de entrada a mitad de funcion.
+#  Splitting every gap every 8 bytes is not the solution: that would be more
+#  than 3000 declarations, and most gaps do contain a single function, so
+#  entry points would be declared in the middle of functions.
 #
-#  Lo que si funciona:
-#    1. Subdividir solo los huecos DEMOSTRADOS multi-entrada (donde ya hubo
-#       un crash dentro). Ver el bloque al final de app/huecos.toml.
-#    2. SONDEO_RELEASE.bat, que los descubre empiricamente de golpe.
+#  What does work:
+#    1. Split only the gaps proven to have several entries (where a crash
+#       already happened inside). See the block at the end of app/huecos.toml.
+#    2. A probing run of the release build, which finds them empirically in
+#       one go.
 # ============================================================================
 
 import argparse
@@ -74,7 +73,7 @@ RE_FUNC = re.compile(r'^DEFINE_REX_FUNC\((?:sub_)?([0-9A-Fa-f]{8})\)')
 
 
 def medir_funciones(gen_dir):
-    """Devuelve {inicio: n_instrucciones} recorriendo el C++ generado."""
+    """Returns {start: instruction_count} by walking the generated C++."""
     tamanos = {}
     ficheros = sorted(f for f in os.listdir(gen_dir) if f.endswith('.cpp'))
     for idx, nombre in enumerate(ficheros, 1):
@@ -142,7 +141,7 @@ def main():
 
     grandes = [h for h in huecos if h[1] >= args.min]
 
-    # Distribucion por tamano
+    # Distribution by size
     dist = {}
     for _, tam, _, _ in huecos:
         dist[tam] = dist.get(tam, 0) + 1
