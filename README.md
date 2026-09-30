@@ -70,6 +70,44 @@ game data ends up in the publishable folder.
 Step-by-step detail, including what to do when something fails:
 [docs/compilar.md](docs/compilar.md).
 
+## Native renderer and Nintendo Switch (from nfsmw-nx)
+
+This tree carries [StevensND/nfsmw-nx](https://github.com/StevensND/nfsmw-nx): a native Vulkan
+renderer that replaces the Xenos emulation, the Switch (libnx/Horizon) layer of the SDK, native
+versions of the hottest game functions, FFmpeg cutscenes and the audio fixes. Its documentation
+starts at [docs/README.md](docs/README.md). Its sources are written for the PAL Spanish XEX; here
+they are translated to PAL English by [tools/editions/pal_en/pal_en.py](tools/editions/pal_en/pal_en.py).
+
+The generated code now needs the port's two post-codegen steps (direct calls and the literal
+copies its native guards compare against), so run codegen through the script:
+
+```sh
+REXGLUE=../rexglue-sdk/out/install/linux-amd64/bin/rexglue tools/codegen.sh app
+```
+
+On PC the emulated renderer stays the default. `--nfsmw_renderizador=nativo` (with
+`--nfsmw_render_sin_mosaico=true`) selects the native one; it needs `nfsmw_shaders.nfsp`, made from
+your disc (see [docs/shaders.md](docs/shaders.md) or the
+[installer page](https://stevensnd.github.io/nfsmw-nx-installer/)), next to the executable. On
+Linux/RADV it currently draws corrupted frames in the world; menus, videos and audio work.
+
+Switch: build the driver ([mesa/README.md](mesa/README.md); on Linux, [mesa/linux/](mesa/linux)),
+then
+
+```sh
+cmake -S app -B app/out/sw8 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=$PWD/tools/switch/cmake/switch-devkitA64.cmake \
+  -DREXSDK_DIR=$PWD/../rexglue-sdk \
+  -DREXGLUE_SWITCH_NVK_SDK=<mesa-switch>/mesa-unified-install/opt/devkitpro/portlibs/switch \
+  -DNFSMW_BUILD_LAUNCHER=OFF
+cmake --build app/out/sw8
+```
+
+and put `nfsmw.nro` (as `nfsmw-nx.nro`), [packaging/switch/nfsmw.toml](packaging/switch/nfsmw.toml),
+`nfsmw_shaders.nfsp` and `game_root/` together in `sdmc:/switch/nfsmw-nx/`. Launch it through a
+title takeover (hold R) or a forwarder set to a 39-bit address space; from the album it does not get
+enough memory (step 8 of [docs/building.md](docs/building.md)).
+
 ## Documentation
 
 The README is in English; the technical documentation is in Spanish, matching the
