@@ -852,6 +852,9 @@ class NfsmwApp : public rex::ReXApp {
       // same place, and the signature may not change even though the game keeps drawing: the alarm fired
       // in the menus of a PC race test with the PM4 ring thread drawing (118,332 draws in those 10 s).
       firma = (firma ^ nfsmw::nativo::SwapsNativos()) * 1099511628211ull;
+      // The same with the emulated renderer: the game's own Swap count. Without it the alarm fired at a
+      // steady 60 fps with the car parked in free roam.
+      firma = (firma ^ g_nfsmw_fotogramas_juego.load(std::memory_order_relaxed)) * 1099511628211ull;
 
       // PERIODIC SNAPSHOT, NO MATTER WHAT.
       //

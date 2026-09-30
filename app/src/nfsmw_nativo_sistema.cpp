@@ -102,7 +102,7 @@ std::string Resumen();
 
 #if REX_PLATFORM_SWITCH
 // Only for RexSwitchSetCurrentThreadPriority. That header deliberately does not include switch.h.
-#include "../../sdk/src/core/threading_switch.h"
+#include "core/threading_switch.h"  // rexglue-sdk/src (NFSMW_REXSDK_SRC)
 #endif
 
 REXCVAR_DEFINE_STRING(nfsmw_renderizador, "xenos", "NFSMW",

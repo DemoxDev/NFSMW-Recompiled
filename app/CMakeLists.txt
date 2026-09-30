@@ -189,6 +189,10 @@ endif()
 # the SDK installed the headers are already in its include directory (the target does not exist there).
 # The same goes for renderdoc_app.h, which rex/ui/vulkan/instance.h includes outside
 # Switch (nfsmw_nativo_sistema.cpp uses the SDK's Vulkan device).
+# The Switch thread helpers (core/threading_switch.h) are private SDK headers.
+if(REXGLUE_PLATFORM_SWITCH)
+    target_include_directories(nfsmw PRIVATE "${NFSMW_REXSDK_SRC}/src")
+endif()
 if(NOT REXGLUE_PLATFORM_SWITCH AND NOT TARGET renderdoc)
     target_include_directories(nfsmw PRIVATE "${NFSMW_REXSDK_SRC}/thirdparty/renderdoc")
 endif()

@@ -50,7 +50,7 @@
 
 #if REX_PLATFORM_SWITCH
 // Only for RexSwitchSetCurrentThreadPriorityOk. switch.h is deliberately not included.
-#include "../../sdk/src/core/threading_switch.h"
+#include "core/threading_switch.h"  // rexglue-sdk/src (NFSMW_REXSDK_SRC)
 #endif
 
 /*
