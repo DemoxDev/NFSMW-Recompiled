@@ -11,10 +11,14 @@ Xenos GPU translated to Vulkan exactly as on Linux.
 MoltenVK. The verification runs were ~75 s boot/shutdown tests through the
 title load; free roam and long sessions are not verified yet.**
 
+Since 2026-09-30 this branch also carries nfsmw-nx (native renderer, native game functions, FFmpeg
+cutscenes) and builds against the SDK fork's `macos` branch. That combination has been built and raced
+on Linux, but **not yet built on a Mac**: the numbers below are from the earlier build.
+
 | Area | State |
 |---|---|
 | Boot, XEX load, guest threads | Working |
-| Title/menu rendering (Vulkan on MoltenVK) | Working. Apple M1 GPU: 30 fps in the heaviest attract scenes and up to 60 fps (16.6 ms frames) elsewhere at `resolution_scale = 1`; ~30 fps at the shipped `resolution_scale = 2` (2560×1440 internal). The four performance patches below are applied by `tools/build_mac.sh`; without them the UI repaints unthrottled and the game drops to 4–15 fps |
+| Title/menu rendering (Vulkan on MoltenVK) | Working. Apple M1 GPU: 30 fps in the heaviest attract scenes and up to 60 fps (16.6 ms frames) elsewhere at `resolution_scale = 1`; ~30 fps at the shipped `resolution_scale = 2` (2560×1440 internal). The four performance fixes below are commits on the SDK fork's `macos` branch; without them the UI repaints unthrottled and the game drops to 4–15 fps |
 | Audio | Working. Opens the default CoreAudio output device (observed: "MacBook Air Speakers", 6 ch, 48000 Hz) |
 | Controller | SDL3 gamepad support is in; not exercised with a pad in the verification runs |
 | Saves | Written to the `--user_data_root` folder, created on demand. Not exercised beyond directory creation |
@@ -28,11 +32,11 @@ driver (`share/vulkan/icd.d/MoltenVK_icd.json` with `is_portability_driver`).
 No new GPU backend was written. `gpu_backend = "null"` keeps the no-rendering
 fallback (the text status console).
 
-Two more things the build carries: the repo's ten patch scripts are applied
-to the SDK before it is compiled (the nine `CONSTRUIR.bat` ones plus
-`parche_fotogramas`, the frame counter that feeds the `[fps]` log line — see
-[docs/parches.md](parches.md)), and SDL3 links statically into the game
-binary, so there is no `libSDL3.dylib` to carry around.
+Two more things the build carries: the SDK is this project's fork on its
+`macos` branch (nfsmw-nx's SDK plus our fixes, the macOS ones included, as
+commits — the `parche_*.py` scripts are no longer applied: their anchors are
+the pristine SDK's), and SDL3 links statically into the game binary, so there
+is no `libSDL3.dylib` to carry around.
 
 ## What goes in the folder
 
@@ -138,9 +142,10 @@ Needs, on an Apple Silicon Mac:
   brew's python is newer than 3.10 it is picked up automatically (`brew
   install python@3.12` on the reference machine), or force it with
   `REX_PYTHON=python3.12`.
-- The ReXGlue SDK checked out next to this repository (`../rexglue-sdk`). The
-  script fetches its submodules on the first run — FFmpeg and MoltenVK are
-  the heavy ones.
+- This project's ReXGlue SDK fork checked out next to this repository
+  (`../rexglue-sdk`) on its `macos` branch; upstream rexglue lacks the
+  nfsmw-nx changes the app needs. The script fetches its submodules on the
+  first run — FFmpeg and MoltenVK are the heavy ones.
 
 Then:
 
@@ -153,15 +158,16 @@ The script runs everything in order and is idempotent:
 1. checks the tools and anchors `SDKROOT` to the Xcode SDK (see
    Troubleshooting for why);
 2. initializes the SDK's submodules if missing;
-3. applies the ten patch scripts (refuses to touch anything if an anchor
-   does not match; already-applied patches are skipped);
+3. checks that `../rexglue-sdk` is the fork's `macos` branch;
 4. configures the SDK with `-DREXGLUE_USE_VULKAN=ON`, builds and installs it:
    `../rexglue-sdk/out/install/mac-arm64/` ends up with the `rexglue` CLI,
    the runtime dylibs and the whole Vulkan stack — `libvulkan.1.dylib`
    (loader), `libMoltenVK.dylib`, `share/vulkan/icd.d/MoltenVK_icd.json`;
-5. runs the code generator first, then compiles the game in a second pass
-   (the generated headers change between the passes, so one combined build
-   would link against a stale PCH);
+5. runs the code generator first, then nfsmw-nx's two post-codegen steps
+   (`tools/llamadas_directas.py`, `tools/copia_literal.py`: the literal
+   copies are compiled in), then compiles the game in a second pass (the
+   generated headers change between the passes, so one combined build would
+   link against a stale PCH);
 6. assembles `build/mac/` — relinks everything to `@rpath`, verifies the
    folder is self-contained (any file that looks like game data aborts the
    build), and finally
@@ -179,6 +185,9 @@ By hand, the essential steps are:
 cmake --preset mac-arm64 -S ../rexglue-sdk -DREXGLUE_USE_VULKAN=ON
 cmake --build ../rexglue-sdk/out/build/mac-arm64 --config Release --target install
 cmake --preset mac-arm64-release -S app -DCMAKE_PREFIX_PATH="$(realpath ../rexglue-sdk/out/install/mac-arm64)"
+(cd app && cmake --build --preset mac-arm64-release --target nfsmw_codegen)
+python3 tools/llamadas_directas.py --gen app/generated/default
+python3 tools/copia_literal.py app/generated/default app/src/copias_literales
 cmake --build app/out/build/mac-arm64-release --target mac_dist   # the folder
 cmake --build app/out/build/mac-arm64-release --target mac_app    # the bundle
 ```

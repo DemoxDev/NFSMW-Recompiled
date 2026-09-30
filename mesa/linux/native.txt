@@ -1,0 +1,3 @@
+[binaries]
+mesa_clc = '/project/builddir-native/src/compiler/clc/mesa_clc'
+vtn_bindgen2 = '/project/builddir-native/src/compiler/spirv/vtn_bindgen2'

@@ -34,8 +34,8 @@ at 854×480.
 | Internal resolution scaling | Working, up to 4× |
 | Save games | Working |
 | Multiplayer | **Not working.** The privilege gate is solved; the network layer underneath is not. See [docs/diario/red-y-privilegios.md](docs/diario/red-y-privilegios.md) |
-| Nintendo Switch (homebrew .nro) | **Experimental.** Boots and runs the game (audio, controller, saves) but nothing is rendered yet. See [docs/switch.md](docs/switch.md) |
-| macOS (Apple Silicon, MoltenVK) | **Experimental.** Builds and boots with rendering through Vulkan on MoltenVK; see [docs/macos.md](docs/macos.md) |
+| Nintendo Switch (homebrew .nro) | **Experimental.** The nfsmw-nx build (native renderer on mesa-switch); this tree's NRO builds but is not yet tested on hardware. See [Native renderer and Nintendo Switch](#native-renderer-and-nintendo-switch-from-nfsmw-nx) |
+| macOS (Apple Silicon, MoltenVK) | **Experimental.** Builds and boots with rendering through Vulkan on MoltenVK; not yet rebuilt on a Mac since the nfsmw-nx merge. See [docs/macos.md](docs/macos.md) |
 
 ## What you need
 
@@ -74,6 +74,44 @@ game data ends up in the publishable folder.
 Step-by-step detail, including what to do when something fails:
 [docs/compilar.md](docs/compilar.md).
 
+## Native renderer and Nintendo Switch (from nfsmw-nx)
+
+This tree carries [StevensND/nfsmw-nx](https://github.com/StevensND/nfsmw-nx): a native Vulkan
+renderer that replaces the Xenos emulation, the Switch (libnx/Horizon) layer of the SDK, native
+versions of the hottest game functions, FFmpeg cutscenes and the audio fixes. Its documentation
+starts at [docs/README.md](docs/README.md). Its sources are written for the PAL Spanish XEX; here
+they are translated to PAL English by [tools/editions/pal_en/pal_en.py](tools/editions/pal_en/pal_en.py).
+
+The generated code now needs the port's two post-codegen steps (direct calls and the literal
+copies its native guards compare against), so run codegen through the script:
+
+```sh
+REXGLUE=../rexglue-sdk/out/install/linux-amd64/bin/rexglue tools/codegen.sh app
+```
+
+On PC the emulated renderer stays the default. `--nfsmw_renderizador=nativo` (with
+`--nfsmw_render_sin_mosaico=true`) selects the native one; it needs `nfsmw_shaders.nfsp`, made from
+your disc (see [docs/shaders.md](docs/shaders.md) or the
+[installer page](https://stevensnd.github.io/nfsmw-nx-installer/)), next to the executable. On
+Linux/RADV it currently draws corrupted frames in the world; menus, videos and audio work.
+
+Switch: build the driver ([mesa/README.md](mesa/README.md); on Linux, [mesa/linux/](mesa/linux)),
+then
+
+```sh
+cmake -S app -B app/out/sw8 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_TOOLCHAIN_FILE=$PWD/tools/switch/cmake/switch-devkitA64.cmake \
+  -DREXSDK_DIR=$PWD/../rexglue-sdk \
+  -DREXGLUE_SWITCH_NVK_SDK=<mesa-switch>/mesa-unified-install/opt/devkitpro/portlibs/switch \
+  -DNFSMW_BUILD_LAUNCHER=OFF
+cmake --build app/out/sw8
+```
+
+and put `nfsmw.nro` (as `nfsmw-nx.nro`), [packaging/switch/nfsmw.toml](packaging/switch/nfsmw.toml),
+`nfsmw_shaders.nfsp` and `game_root/` together in `sdmc:/switch/nfsmw-nx/`. Launch it through a
+title takeover (hold R) or a forwarder set to a 39-bit address space; from the album it does not get
+enough memory (step 8 of [docs/building.md](docs/building.md)).
+
 ## Documentation
 
 The README is in English; the technical documentation is in Spanish, matching the
@@ -87,7 +125,7 @@ source comments.
 | [docs/lanzador.md](docs/lanzador.md) | The launcher, its settings and how it is built |
 | [docs/rendimiento.md](docs/rendimiento.md) | Measured findings: EDRAM paths, resolution scaling, frame pacing |
 | [docs/problemas-conocidos.md](docs/problemas-conocidos.md) | What is broken and how far each one was traced |
-| [docs/switch.md](docs/switch.md) | The Nintendo Switch build: SD card layout, launching, building (English) |
+| [docs/switch.md](docs/switch.md) | The earlier NXVK Switch build, superseded by nfsmw-nx's; kept for its bring-up notes (English) |
 | [docs/diario/](docs/diario/) | Long-form write-ups of the harder diagnoses |
 
 The diary is worth reading before touching the audio or graphics code. Each entry
@@ -156,10 +194,15 @@ work with its own terms.
 Need for Speed and Most Wanted are trademarks of Electronic Arts Inc. This project is
 not affiliated with, endorsed by, or connected to Electronic Arts in any way.
 
-⚠️ IMPORTANT ROM REQUIREMENT: This project strictly requires the Need for Speed: Most Wanted (2005) [Xbox 360] ROM in its PAL Spain version. PAL UK (English) or NTSC (US) versions are not acceptable (for now).
+⚠️ IMPORTANT ROM REQUIREMENT: this tree is built against the **PAL English** `default.xex`
+(title `454107D9`, entry point `0x8262E9A8`). Every hook and codegen override is written for that
+executable; other editions need their addresses translated first (see
+[tools/editions/pal_en/pal_en.py](tools/editions/pal_en/pal_en.py) and [docs/editions.md](docs/editions.md)).
 
 ## Credits
 
 - [ReXGlue SDK](https://github.com/rexglue/rexglue-sdk) — the runtime this is built on
 - [XenonRecomp](https://github.com/hedge-dev/XenonRecomp) — the static recompilation approach
 - [Xenia](https://xenia.jp/) — the kernel and GPU emulation ReXGlue descends from
+- [StevensND/nfsmw-nx](https://github.com/StevensND/nfsmw-nx) — the native Vulkan renderer, the Nintendo
+  Switch port, the audio and cutscene work and the edition tools merged into this tree

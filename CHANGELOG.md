@@ -6,8 +6,12 @@ Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ### Añadido
 
+- nfsmw-nx (StevensND): renderizador nativo en Vulkan, port de Nintendo Switch sobre mesa-switch,
+  funciones del juego en nativo, videos con FFmpeg y los arreglos de audio, traducido del XEX PAL
+  español al PAL inglés con `tools/editions/pal_en/pal_en.py`. Los arreglos de macOS pasan de
+  `parche_*.py` a commits de la rama `macos` del SDK.
 - Compilación nativa de macOS (Apple Silicon) con Vulkan sobre MoltenVK:
-  `tools/build_mac.sh` aplica los parches al SDK, lo compila con el stack
+  `tools/build_mac.sh` comprueba que el SDK es la rama `macos` del fork, lo compila con el stack
   Vulkan→MoltenVK de sus submódulos (loader + ICD), genera el código, compila
   el juego y arma `build/mac/` autocontenida y el bundle `NFSMW.app`.
   Documentación en `docs/macos.md`.

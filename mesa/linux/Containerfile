@@ -1,0 +1,28 @@
+# Build image for mesa-switch (NFSMW patch) on Linux.
+# Copy this folder to <mesa-switch>/nfsmw-build (the paths below and in build.sh expect it there).
+# Derived from the NXVK toolchain image (devkitA64 15.2.0 / libnx 4.12.0, meson,
+# LLVM 15 + libclc, Rust nightly, bindgen/cbindgen); the nxvk tag is not modified.
+#
+#   podman build -t mesa-switch-nfsmw -f nfsmw-build/Containerfile nfsmw-build
+FROM localhost/nxvk
+
+# Rust std for the target mesa-switch compiles NAK with (see build-unified.sh).
+RUN rustup target add aarch64-unknown-linux-gnu
+
+# Native mesa_clc/vtn_bindgen2 build needs zlib; Mesa's generators need packaging.
+RUN apt-get update && apt-get install -y --no-install-recommends zlib1g-dev python3-packaging \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/clang-15 /usr/local/bin/clang \
+    && ln -s /usr/lib/llvm-15/lib/clang/15.0.6/include /usr/lib/llvm-15/lib/clang/15/include \
+    && rm -f /opt/devkitpro/portlibs/switch/lib/pkgconfig/SPIRV-*.pc \
+             /opt/devkitpro/portlibs/switch/lib/pkgconfig/LLVMSPIRVLib.pc \
+             /opt/devkitpro/portlibs/switch/lib/pkgconfig/libclc.pc
+# ^ mesa_clc (shared LLVM) looks for opencl-c-base.h under clang/<major>/include (as build-switch.sh).
+#   nxvk bakes the x86_64 host SPIRV-Tools/libclc .pc files into the Switch pkg-config dir; the
+#   Switch build would then compile vtn_debug.c against host-only SPIRV-Tools and fail.
+
+ENV DEVKITPRO=/opt/devkitpro \
+    PATH=/opt/devkitpro/devkitA64/bin:/opt/rust/cargo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    MESA_SWITCH_RUSTC=/opt/rust/cargo/bin/rustc \
+    MESA_SWITCH_BINDGEN=/opt/rust/cargo/bin/bindgen \
+    MESA_SWITCH_RUST_TARGET=aarch64-unknown-linux-gnu

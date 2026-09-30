@@ -95,28 +95,20 @@ vulkan-headers vulkan-memory-allocator spirv-headers spirv-tools glslang vulkan-
 }
 
 # ---------------------------------------------------------------------------
-# 2. Parches. Idempotentes; el orden es el de CONSTRUIR.bat y no es capricho
-#    (anillo va antes que desatasco, que usa lo que anillo añade).
-#    parche_fotogramas es el décimo, el parche LOCAL del contador de fotogramas
-#    que la app lee para el [fps] y que nunca llegó al SDK puro (v0.10.0).
-#    Los cinco últimos son los arreglos de macOS y van también en CONSTRUIR.bat
-#    porque no son específicos de la plataforma: el pipeline del presentador y
-#    el límite de ritmo de la UI son del backend Vulkan, los cvars del plugin
-#    y el sueño del Sleep(0) son del runtime, y el audio silencioso evita que
-#    el juego muera cuando no hay dispositivo de sonido.
+# 2. El SDK tiene que ser el fork con los arreglos ya como commits (rama
+#    macos: nfsmw-nx + los arreglos de macOS). Los parche_*.py no se aplican:
+#    sus anclas son las del SDK puro y ahi ya no casan. Se comprueba con dos
+#    marcas: la capa de nfsmw-nx (ffmpeg-overlay/nfsmw) y el audio silencioso.
 # ---------------------------------------------------------------------------
-fase_parches() {
-    echo "== 2. Parches del SDK =="
-    local parches="parche_diagnostico parche_anillo parche_desatasco parche_presentador \
-parche_gpu_fallback parche_restaurar parche_velocidad parche_backend parche_privilegios \
-parche_fotogramas parche_ui_ticks parche_pipeline_pintado parche_cvar_plugin parche_sleep0 \
-parche_audio_silencio"
-    local p
-    for p in $parches; do
-        echo "   $p"
-        "$REX_PYTHON" "tools/$p.py" || {
-            echo "[ERROR] Falló $p. Mira tools/$p.py --estado y docs/parches.md."; exit 1; }
-    done
+fase_sdk_rama() {
+    echo "== 2. Rama del SDK =="
+    if [ ! -d "$SDK_DIR/thirdparty/ffmpeg-overlay/nfsmw" ] ||
+       ! grep -q InitializeSilent "$SDK_DIR/include/rex/audio/sdl/sdl_audio_driver.h"; then
+        echo "[ERROR] $SDK_DIR no es el SDK de este proyecto (rama macos del fork, con nfsmw-nx)."
+        echo "        git -C $SDK_DIR checkout macos"
+        exit 1
+    fi
+    echo "   $(git -C "$SDK_DIR" log -1 --format='%h %s' 2>/dev/null || echo '(sin git)')"
 }
 
 # ---------------------------------------------------------------------------
@@ -145,7 +137,7 @@ fase_sdk() {
 
 fase_comprobaciones
 fase_submodulos
-fase_parches
+fase_sdk_rama
 fase_sdk
 
 # ---------------------------------------------------------------------------
@@ -162,6 +154,11 @@ fase_app() {
     # Los presets del build viven en app/CMakePresets.json: cmake --build
     # --preset los busca en el cwd, asi que la pasada se lanza desde app.
     ( cd app && cmake --build --preset mac-arm64-release --target nfsmw_codegen )
+    # nfsmw-nx: llamadas directas entre funciones del juego sin gancho (LTO puede
+    # meterlas en linea) y las copias literales de las cinco funciones que
+    # comprueban los guardias nativos, que se compilan. Como tools/codegen.sh.
+    REXSDK_DIR=$SDK_DIR "$REX_PYTHON" tools/llamadas_directas.py --gen app/generated/default
+    "$REX_PYTHON" tools/copia_literal.py app/generated/default app/src/copias_literales
     ( cd app && cmake --build --preset mac-arm64-release )
 }
 

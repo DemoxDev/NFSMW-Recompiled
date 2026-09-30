@@ -78,3 +78,18 @@ __pycache__/
 # Los parches actuales aplican y revierten por texto y no dejan .original, pero
 # algunos del SDK todavia los generan.
 *.original
+
+# --- nfsmw-nx (native renderer, Switch build) ----------------------------------
+# Shader library made from your own disc, the literal copies of game functions
+# the native guards compare against, and the Switch build products.
+*.nfsp
+*.bin
+app*/src/copias_literales/
+app*/src/nfsmw_nativo_resplandor_*_spirv.h
+app_*/
+*.nro
+*.nacp
+*.elf
+shaders/wasm/out/
+__pycache__/
+*.pyc

@@ -1,5 +1,10 @@
 # Nintendo Switch (homebrew .nro)
 
+> **Superseded (2026-09-30).** This page documents the NXVK/Xenos-emulation Switch build, which topped
+> out at about one frame every three seconds on hardware. The Switch build is now the nfsmw-nx one
+> (native renderer on mesa-switch): see "Native renderer and Nintendo Switch" in the README and
+> [docs/building.md](building.md). Kept for the bring-up notes.
+
 A native aarch64 build for Horizon OS, launched from the Homebrew Menu. It is
 the same recompiled code as the PC builds, compiled for the Switch's Cortex-A57
 and linked against libnx.
